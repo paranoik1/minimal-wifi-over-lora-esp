@@ -1,0 +1,7 @@
+menu "ESP Client Node"
+
+    config USE_MOCK_TRANSPORT
+        bool "Использовать транспорт-заглушку для передачи данных на ESP Server Node"
+        default y
+
+endmenu
