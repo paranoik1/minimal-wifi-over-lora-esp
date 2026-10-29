@@ -16,41 +16,46 @@ static const BLEUUID CHR_RESPONSE_PACKET_UUID("550e8400-e29b-41d4-a716-446655440
 BLEManagerData* configure_ble_server(void (*onWriteRequestPacketCHR)(BLECharacteristic c, const BLEConnInfo &conn)) {
     BLE.begin(BLE_DEVICE_NAME);
 
-    BLEServer server = BLE.createServer();
+    BLEServer* server = new BLEServer(BLE.createServer());
 
-    BLEService service = server.createService(SERVICE_UUID);
-    server.advertiseOnDisconnect(true);
+    BLEService* service = new BLEService(server->createService(SERVICE_UUID));
+    server->advertiseOnDisconnect(true);
     
-    BLECharacteristic chr = service.createCharacteristic(
-        CHR_REQUEST_PACKET_UUID,
-        BLEProperty::Write,
-        BLEPermission::WriteEncrypted
+    BLECharacteristic* chr_client_packet = new BLECharacteristic(
+        service->createCharacteristic(
+            CHR_REQUEST_PACKET_UUID,
+            BLEProperty::Write,
+            BLEPermission::WriteEncrypted
+        )
     );
-    chr.onWrite([onWriteRequestPacketCHR](BLECharacteristic c, const BLEConnInfo &conn) {
+    
+    chr_client_packet->onWrite([onWriteRequestPacketCHR](BLECharacteristic c, const BLEConnInfo &conn) {
         onWriteRequestPacketCHR(c, conn);
     });
     
-    BLECharacteristic chr_notify = service.createCharacteristic(
-        CHR_RESPONSE_PACKET_UUID,
-        BLEProperty::Notify | BLEProperty::Read,
-        BLEPermission::ReadEncrypted
+    BLECharacteristic* chr_notify_server_packets = new BLECharacteristic( 
+        service->createCharacteristic(
+            CHR_RESPONSE_PACKET_UUID,
+            BLEProperty::Notify | BLEProperty::Read,
+            BLEPermission::ReadOpen
+        )
     );
 
-    BTStatus status = server.start();
+    BTStatus status = server->start();
     if (status != BTStatus::OK) {
         Serial.println("Failed start server");
         return nullptr;
     }
 
-    BLEManagerData* data = (BLEManagerData*)std::malloc(sizeof(BLEManagerData));
+    BLEManagerData* data = new BLEManagerData(); //(BLEManagerData*)std::malloc(sizeof(BLEManagerData));
     if (data == nullptr) {
         Serial.println("Failed to allocate BLEManagerData");
         return nullptr;
     }
-    data->ch_client_packet = &chr;
-    data->ch_server_response = &chr_notify;
-    data->p_server = &server;
-    data->p_service = &service;
+    data->ch_client_packet = chr_client_packet;
+    data->ch_server_response = chr_notify_server_packets;
+    data->server = server;
+    data->packets_service = service;
 
     return data; 
 }
@@ -77,7 +82,7 @@ void set_ble_server_callbacks(
     void (*onConnect)(), 
     void (*onDisconnect)(BLEManagerData *data, uint8_t reason)
 ) {
-    BLEServer server = *data->p_server;
+    BLEServer server = *data->server;
     server.onConnect([onConnect](BLEServer s, const BLEConnInfo &conn) {
         onConnect();
     });
@@ -89,9 +94,10 @@ void set_ble_server_callbacks(
 
 void ble_notify_response_packet_raw(BLEManagerData *data, uint8_t* pkt_raw, size_t size_packet) {
     data->ch_server_response->setValue(pkt_raw, size_packet);
-    BTStatus status = data->ch_server_response->notify(pkt_raw, size_packet);
+    std::cout << "Subscribers: " << data->ch_server_response->getSubscribedCount() << std::endl;
+    BTStatus status = data->ch_server_response->notify();//notify(pkt_raw, size_packet);
 
     if (status != BTStatus::OK) {
-        std::cout << "Ошибка при notify пакета" << std::endl;
+        std::cout << "Ошибка при notify пакета: " << status.toString() << std::endl;
     }
 }

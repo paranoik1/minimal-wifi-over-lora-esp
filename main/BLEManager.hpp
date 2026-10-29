@@ -12,9 +12,10 @@
 //     BLECharacteristic *p_ch_notify;
 // } BLEManagerData;
 
+// Структура хранения BLE данных
 struct BLEManagerData {
-    BLEServer *p_server;
-    BLEService *p_service;
+    BLEServer *server;
+    BLEService *packets_service;
     BLECharacteristic *ch_client_packet;
     BLECharacteristic *ch_server_response;
 };
