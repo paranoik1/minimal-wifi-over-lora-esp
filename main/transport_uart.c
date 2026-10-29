@@ -1,7 +1,10 @@
 #include "driver/uart.h"
 #include "transport_uart.h"
 #include "freertos/projdefs.h"
+#include <machine/endian.h>
 #include <stdint.h>
+#include "packet.h"
+#include <endian.h>
 
 
 
@@ -45,20 +48,59 @@ void init_transport() {
 }
 
 
-size_t receive_packet(uint8_t *buffer, size_t max_len) {
-    memset(buffer, 0, max_len);
+Packet* transport_receive_packet() {
+    uint8_t pkt_raw[MAX_PACKET_SIZE] = {};
 
-    int length = uart_read_bytes(UART_SERVER, buffer, max_len, pdMS_TO_TICKS(20));
-    if (length == -1) return 0;
+    // Сначала читаем метаданные.
+    int length = uart_read_bytes(
+        UART_SERVER,
+        pkt_raw,
+        SIZE_METADATA_PACKET,
+        pdMS_TO_TICKS(20)
+    );
 
-    return length;
+    if (length != SIZE_METADATA_PACKET) {
+        return NULL;
+    }
+
+    size_t payload_length = pkt_raw[SIZE_METADATA_PACKET - 1];
+    size_t remaining_length = payload_length + BYTES_AFTER_PAYLOAD; // payload + CRC
+
+    // так как каждый элемент массива pkt_raw = 1 байту => для получения его длины достаточно лишь sizeof (без деления на размер 1 элемента)
+    if (SIZE_METADATA_PACKET + remaining_length > sizeof(pkt_raw)) {
+        return NULL;
+    }
+
+    // Читаем payload и CRC в тот же буфер.
+    length = uart_read_bytes(
+        UART_SERVER,
+        // Вспоминаем адресную арифметику - pkt_raw - указатель на первый элемент в массиве
+        // => адрес 1 элемента + SIZE_METADATA_PACKET (5) будет указывать на 5 элемент в массиве => с него и начнется запись данных до адрес 1 эл + SIZE_METADATA_PACKET + remaining_length
+        pkt_raw + SIZE_METADATA_PACKET,
+        remaining_length,
+        pdMS_TO_TICKS(20)
+    );
+
+    if (length != remaining_length) {
+        printf("[transport_receive] не прошел проверку длины: length = %d, remaining_length = %d\n", length, remaining_length);
+        return NULL;
+    }
+
+    return packet_from_bytes(pkt_raw);
 }
 
 
-void send_packet(const uint8_t *packet, size_t size_packet) {
-    printf("size: %d\n", size_packet);
-    int bytes_written = uart_write_bytes(UART_SERVER, packet, size_packet);
+void transport_send_packet(Packet *packet) {
+    size_t size_packet;
+    uint8_t* pkt_raw = packet_to_bytes(packet, &size_packet);
+
+    printf("Размер пакета: %d\n", size_packet);
+    int bytes_written = uart_write_bytes(UART_SERVER, pkt_raw, size_packet);
+    
+    free(pkt_raw);
+
     if (bytes_written == -1) {
         printf("Error: Failed to write UART\n");
     } 
+    printf("Bytes written: %d\n", bytes_written);
 }

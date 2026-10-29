@@ -1,6 +1,6 @@
 # main/CMakeLists.txt
 idf_component_register(
-    SRCS "transport_uart.c" "main.cpp" "BLEManager.cpp"
+    SRCS "packet.c" "transport_uart.c" "main.cpp" "BLEManager.cpp"
     INCLUDE_DIRS "."
     REQUIRES arduino-esp32
 )

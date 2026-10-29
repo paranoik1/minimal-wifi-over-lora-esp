@@ -2,7 +2,8 @@
 #define TRANSPORT_H
 
 
-#include <stdint.h>
+#include "packet.h"
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -10,9 +11,9 @@ extern "C" {
 void init_transport();
 
 
-size_t receive_packet(uint8_t* buff, size_t max_len);
+Packet* transport_receive_packet();
 
-void send_packet(const uint8_t* packet, size_t size_packet);
+void transport_send_packet(Packet *packet);
 
 
 #ifdef __cplusplus

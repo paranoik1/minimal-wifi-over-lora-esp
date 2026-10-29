@@ -1,8 +1,10 @@
 // main/main.cpp
 #include "BLEManager.hpp"
 #include "driver/gpio.h"
+#include "freertos/idf_additions.h"
 #include "freertos/projdefs.h"
 #include "hal/gpio_types.h"
+#include "packet.h"
 
 #if CONFIG_USE_MOCK_TRANSPORT
 #   include "transport_uart.h"
@@ -11,20 +13,114 @@
 #endif
 
 
-#define GPIO_LED    GPIO_NUM_2
-#define BUFFER_SIZE 3000
+#define GPIO_LED            GPIO_NUM_2
+#define MAX_ITEMS_QUEUE     20
+#define USER_ID             1
 
 
-void task_read_bytes(void *pvParameters) {
-    uint8_t* buffer = (uint8_t*)std::malloc(BUFFER_SIZE);
+QueueHandle_t client_received_packets_queue;
+QueueHandle_t server_received_packets_queue;
+QueueHandle_t send_packets_queue;
+
+
+void queue_send_and_wait(QueueHandle_t queue, Packet *pkt) {
     while (1) {
-        size_t length = receive_packet(buffer, BUFFER_SIZE);
-        if (length == 0) 
-            vTaskDelay(pdMS_TO_TICKS(20));
-        else
-            printf("Read bytes: %s\n", (const char *)buffer);
+        if (xQueueSend(queue, &pkt, pdMS_TO_TICKS(20)) != pdTRUE) 
+            continue;
+        break;
     }
 }
+
+
+/*
+Таска для приема сообщений от LoRa и закидваний их в очередь server_received_packets_queue (не занимается проверкой контрольной суммы и ID пользователя)
+*/
+void task_receive_server_packets(void *pvParameters) {
+    while (1) {
+        Packet *pkt = transport_receive_packet();
+        if (pkt == NULL) continue;
+
+        queue_send_and_wait(server_received_packets_queue, pkt);
+
+        printf("Receive packet: ");
+        print_packet(pkt);
+    }
+}
+
+
+/*
+Таска для отправки сообщений по LoRa (берет пакеты из очереди send_packets_queue)
+*/
+void task_send_packets_to_server(void *pvParameters) {
+    while (1) {
+        Packet* pkt = NULL;
+        if (xQueueReceive(send_packets_queue, &pkt, pdMS_TO_TICKS(20)) != pdTRUE)
+            continue;
+
+        transport_send_packet(pkt);
+        free_packet(&pkt);
+    }
+}
+
+
+/*
+Таска для обработки полученных пакетов (сообщений) от сервера (проверка контрольной суммы, проверка user_id) с последующей отправкой по BLE клиенту
+*/
+void task_process_server_packets(void *pvParameters) {
+    BLEManagerData* ble_data = (BLEManagerData*)pvParameters; 
+    while (1) {
+        Packet *pkt = NULL;
+        if (xQueueReceive(server_received_packets_queue, &pkt, pdMS_TO_TICKS(20)) != pdTRUE) 
+            continue;
+
+        size_t pkt_size = 0;
+        uint8_t* pkt_raw = packet_to_bytes(pkt, &pkt_size);
+        // длина пакета без crc8
+        uint8_t calculated_crc8 = packet_raw_calculate_crc8(pkt_raw, pkt_size - 1);
+
+        if (pkt->crc8 != calculated_crc8) {
+            printf("Получен невалидный пакет (несоответсвие контрольных сумм: pkt.crc8 %d != %d - calculated_crc8): ", pkt->crc8, calculated_crc8);
+            goto free_pkt; 
+        }
+
+        if (pkt->user_id != USER_ID) {
+            printf("Получен пакет чужого пользователя, отбрасываем...");
+            goto free_pkt; 
+        }
+
+        ble_notify_response_packet_raw(ble_data, pkt_raw, pkt_size);
+
+    free_pkt:
+        printf("Очистка кучи: ");
+        print_packet(pkt);
+        free(pkt_raw);
+        free_packet(&pkt);
+    }
+}
+
+
+
+
+
+void __init_queue(QueueHandle_t *queue, const char* error_message) {
+    *queue = xQueueCreate(MAX_ITEMS_QUEUE, sizeof(Packet*));
+    if (queue == NULL) {
+        printf("%s\n", error_message);
+        while(1);
+    }
+}
+
+/*
+Инициализация очередей для работы с пакетами в параллельном режиме (ну почти)
+*/
+void init_queue_tasks() {
+    __init_queue(&server_received_packets_queue, "Queue server_received_packets is NULL");
+    __init_queue(&client_received_packets_queue, "Queue client_received_packets is NULL");
+    __init_queue(&send_packets_queue, "Queue send_packets is NULL");
+}
+
+
+
 
 
 extern "C" void app_main(void)
@@ -32,26 +128,30 @@ extern "C" void app_main(void)
     gpio_reset_pin(GPIO_LED);
     gpio_set_direction(GPIO_LED, GPIO_MODE_OUTPUT);
 
+    // Инициализация очередей
+    init_queue_tasks();
     // Инициализация Arduino runtime
     initArduino();
-    Serial.begin(115200);
+    // Инициализациия транспорта (передача и получение пакетов)
     init_transport();
+
+    Serial.begin(115200);
+
     
-    BLEManagerData *data = configure_ble_server([](BLECharacteristic chr, const BLEConnInfo &conn) {
-        Serial.println("Sending packet...");
+    BLEManagerData *ble_data = configure_ble_server([](BLECharacteristic chr, const BLEConnInfo &conn) {
+        Serial.println("Получен сформированный пакет...");
         size_t size_packet = 0;
-        const uint8_t* packet = chr.getValue(&size_packet);
-        Serial.println(chr.getStringValue());
-        send_packet(packet, size_packet);
-        Serial.println("Packet succefull send!");
+        const uint8_t* pkt_raw = chr.getValue(&size_packet);
+        Packet* packet = packet_from_bytes(pkt_raw);
+        queue_send_and_wait(client_received_packets_queue, packet);
     });
-    if (data == nullptr) {
+    if (ble_data == nullptr) {
         Serial.println("BLE configuration failed!");
-        return;
+        while(1);
     }
 
     set_ble_server_callbacks(
-        data, 
+        ble_data, 
         []() {
             Serial.println("Connected");
             gpio_set_level(GPIO_LED, 1);
@@ -74,15 +174,45 @@ extern "C" void app_main(void)
     Serial.println("BLE Server started successfully!");
 
     xTaskCreate(
-        task_read_bytes,
-        "Read Bytes",
+        task_receive_server_packets,
+        "Receive server packets",
         2048,
         NULL,
         2,
         NULL
     );
-    // // В реальном проекте лучше вынести в отдельную задачу FreeRTOS
-    // while (1) {
-    //     vTaskDelay(pdMS_TO_TICKS(10));  // Не блокируем CPU
-    // }
+
+    xTaskCreate(
+        task_send_packets_to_server,
+        "Send packets",
+        2048,
+        NULL,
+        2,
+        NULL
+    );
+
+    xTaskCreate(
+        task_process_server_packets,
+        "Process server packets",
+        2048,
+        ble_data,
+        1,
+        NULL
+    );
+
+    while (1) {
+        Packet *pkt = NULL;
+        if (xQueueReceive(client_received_packets_queue, &pkt, pdMS_TO_TICKS(20)) != pdTRUE) {
+            continue;
+        }
+
+        if (pkt == NULL) {
+            printf("Empty packet\n");
+            continue;
+        }
+        
+        printf("Отправляем пакет: ");
+        print_packet(pkt);
+        queue_send_and_wait(send_packets_queue, pkt);
+    }
 }
