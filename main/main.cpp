@@ -6,6 +6,7 @@
 #include "hal/gpio_types.h"
 #include "packet.h"
 
+
 #if CONFIG_USE_MOCK_TRANSPORT
 #   include "transport_uart.h"
 #else
@@ -79,12 +80,12 @@ void task_process_server_packets(void *pvParameters) {
         uint8_t calculated_crc8 = packet_raw_calculate_crc8(pkt_raw, pkt_size - 1);
 
         if (pkt->crc8 != calculated_crc8) {
-            printf("Получен невалидный пакет (несоответсвие контрольных сумм: pkt.crc8 %d != %d - calculated_crc8): ", pkt->crc8, calculated_crc8);
+            printf("Получен невалидный пакет (несоответсвие контрольных сумм: pkt.crc8 %d != %d - calculated_crc8)\n", pkt->crc8, calculated_crc8);
             goto free_pkt; 
         }
 
         if (pkt->user_id != USER_ID) {
-            printf("Получен пакет чужого пользователя, отбрасываем...");
+            printf("Получен пакет чужого пользователя, отбрасываем...\n");
             goto free_pkt; 
         }
 

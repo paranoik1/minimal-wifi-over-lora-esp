@@ -1,7 +1,6 @@
 #include "BLEManager.hpp"
 #include "gatt/BLECharacteristic.h"
 #include "types/BLEProperty.h"
-#include <cstdlib>
 #include <iostream>
 
 

@@ -1,10 +1,6 @@
 #include "driver/uart.h"
 #include "transport_uart.h"
-#include "freertos/projdefs.h"
-#include <machine/endian.h>
-#include <stdint.h>
 #include "packet.h"
-#include <endian.h>
 
 
 
@@ -24,7 +20,6 @@ void init_transport() {
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .rx_flow_ctrl_thresh = 122,
     };
     ESP_ERROR_CHECK(
         uart_param_config(UART_SERVER, &uart_config)
@@ -45,6 +40,8 @@ void init_transport() {
             0, NULL, 0
         )
     );
+
+    uart_flush(UART_SERVER);
 }
 
 
