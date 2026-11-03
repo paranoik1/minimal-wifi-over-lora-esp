@@ -16,7 +16,7 @@
 
 #define GPIO_LED            GPIO_NUM_2
 #define MAX_ITEMS_QUEUE     20
-#define USER_ID             1
+// #define USER_ID             1
 
 
 QueueHandle_t client_received_packets_queue;
@@ -84,10 +84,13 @@ void task_process_server_packets(void *pvParameters) {
             goto free_pkt; 
         }
 
-        if (pkt->user_id != USER_ID) {
-            printf("Получен пакет чужого пользователя, отбрасываем...\n");
-            goto free_pkt; 
-        }
+        // NOTE: Проверку на user_id осуществляет Android приложение
+        // Это было сделано для упрощения регистрации пользователя в сети (через простой скан QR-кода через Android приложение)
+        // А так же это дает возможность нескольким телефонам использовать одно клиентское устройство
+        // if (pkt->user_id != USER_ID) {
+        //     printf("Получен пакет чужого пользователя, отбрасываем...\n");
+        //     goto free_pkt; 
+        // }
 
         ble_notify_response_packet_raw(ble_data, pkt_raw, pkt_size);
 
