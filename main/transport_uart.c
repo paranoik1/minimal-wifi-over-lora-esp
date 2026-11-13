@@ -11,6 +11,7 @@
 #define UART_BUFFER_SIZE    2048
 #define RX_GPIO             16
 #define TX_GPIO             17
+#define LOG_TAG             "transport"
 
 
 void init_transport() {
@@ -91,13 +92,13 @@ void transport_send_packet(Packet *packet) {
     size_t size_packet;
     uint8_t* pkt_raw = packet_to_bytes(packet, &size_packet);
 
-    printf("Размер пакета: %d\n", size_packet);
+    ESP_LOGD(LOG_TAG, "Размер пакета: %d\n", size_packet);
     int bytes_written = uart_write_bytes(UART_SERVER, pkt_raw, size_packet);
     
     free(pkt_raw);
 
     if (bytes_written == -1) {
-        printf("Error: Failed to write UART\n");
+        ESP_LOGE(LOG_TAG, "Error: Failed to write UART\n");
     } 
-    printf("Bytes written: %d\n", bytes_written);
+    ESP_LOGD(LOG_TAG, "Bytes written: %d", bytes_written);
 }

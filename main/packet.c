@@ -52,7 +52,7 @@ uint8_t* packet_to_bytes(Packet *pkt, size_t* size_pkt_buff) {
     // packet_calculate_crc8(pkt_bytes, length_payload + 5)
     pkt_bytes[SIZE_METADATA_PACKET + length_payload] = pkt->crc8;
 
-    *size_pkt_buff = length_payload + SIZE_METADATA_PACKET + BYTES_AFTER_PAYLOAD;
+    *size_pkt_buff = SIZE_METADATA_PACKET + length_payload + BYTES_AFTER_PAYLOAD;
 
     return pkt_bytes;
 }
@@ -89,18 +89,6 @@ Packet* packet_from_bytes(const uint8_t* pkt_raw) {
     pkt_ptr->encrypted_payload = payload;
     pkt_ptr->crc8 = crc8;
 
-    // Packet packet = {
-    //     .user_id = header >> 4,
-    //     .msg_type = header & 0x0F,
-    //     .session_id = session_info >> 4,
-    //     .flags = session_info & 0x0F,
-    //     .pkt_id = pkt_id,
-    //     .length_payload = length_payload,
-    //     .encrypted_data = payload,
-    //     .crc8 = crc8
-    // };
-
-    // *pkt_ptr = packet;
     return pkt_ptr;
 }
 

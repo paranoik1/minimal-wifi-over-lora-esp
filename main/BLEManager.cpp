@@ -1,15 +1,22 @@
 #include "BLEManager.hpp"
+#include "esp_log.h"
 #include "gatt/BLECharacteristic.h"
 #include "types/BLEProperty.h"
-#include <iostream>
 
 
-#define BLE_DEVICE_NAME                 "Mini_Wi-Fi_over_LoRa"
+#define BLE_DEVICE_NAME        "Mini_Wi-Fi_over_LoRa"
+#define LOG_TAG                "BLEManager"         
 
 
 static const BLEUUID SERVICE_UUID("550e8400-e29b-41d4-a716-446655440001");
 static const BLEUUID CHR_REQUEST_PACKET_UUID("550e8400-e29b-41d4-a716-446655440002");
 static const BLEUUID CHR_RESPONSE_PACKET_UUID("550e8400-e29b-41d4-a716-446655440003");
+
+
+void onSubcribeLog(const BLECharacteristic &chr, const BLEConnInfo &conn, uint16_t subValue) {
+    ESP_LOGI(LOG_TAG, "Новый подписчик на уведомления");
+    ESP_LOGI(LOG_TAG, "Подписок: %d", chr.getSubscribedCount());
+}
 
 
 BLEManagerData* configure_ble_server(void (*onWriteRequestPacketCHR)(BLECharacteristic c, const BLEConnInfo &conn)) {
@@ -39,16 +46,18 @@ BLEManagerData* configure_ble_server(void (*onWriteRequestPacketCHR)(BLECharacte
             BLEPermission::ReadOpen
         )
     );
+    // chr_notify_server_packets->onStatus(onStatusIndicate);
+    chr_notify_server_packets->onSubscribe(onSubcribeLog);
 
     BTStatus status = server->start();
     if (status != BTStatus::OK) {
-        Serial.println("Failed start server");
+        ESP_LOGE(LOG_TAG, "Failed start server");
         return nullptr;
     }
 
     BLEManagerData* data = new BLEManagerData(); //(BLEManagerData*)std::malloc(sizeof(BLEManagerData));
     if (data == nullptr) {
-        Serial.println("Failed to allocate BLEManagerData");
+        ESP_LOGE(LOG_TAG, "Failed to allocate BLEManagerData");
         return nullptr;
     }
     data->ch_client_packet = chr_client_packet;
@@ -62,17 +71,18 @@ BLEManagerData* configure_ble_server(void (*onWriteRequestPacketCHR)(BLECharacte
 
 void start_advertising_ble() {
     BLEAdvertising advertising = BLE.getAdvertising();
+    advertising.addServiceUUID(SERVICE_UUID);
+    advertising.setScanResponse(true);
+
     BTStatus status = advertising.start();
 
-    // BLEAdvertising pAdvertising = data->p_server->getAdvertising();
-    // pAdvertising.addServiceUUID(SERVICE_UUID);
-    // pAdvertising.setScanResponse(true);
-    // BTStatus status = pAdvertising.start();
-
     if (status != BTStatus::OK) {
-        Serial.println("Failed start advertising...");
-        Serial.println(strcat((char*)"Status returned: ", status.toString()));
-        std::cout << "Advertising is started: " << advertising.isAdvertising() << std::endl;
+        ESP_LOGE(
+            LOG_TAG, 
+            "Failed start advertising: status=%s, is_started=%d", 
+            status.toString(), 
+            advertising.isAdvertising()
+        );
     }
 }
 
@@ -93,10 +103,19 @@ void set_ble_server_callbacks(
 
 void ble_notify_response_packet_raw(BLEManagerData *data, uint8_t* pkt_raw, size_t size_packet) {
     data->ch_server_response->setValue(pkt_raw, size_packet);
-    std::cout << "Subscribers: " << data->ch_server_response->getSubscribedCount() << std::endl;
-    BTStatus status = data->ch_server_response->notify();//notify(pkt_raw, size_packet);
-
-    if (status != BTStatus::OK) {
-        std::cout << "Ошибка при notify пакета: " << status.toString() << std::endl;
+    
+    // Логируем размер и количество подписчиков ПЕРЕД отправкой
+    ESP_LOGI(LOG_TAG, "Отправка notify: размер=%zuB, подписчиков=%d", 
+             size_packet, data->ch_server_response->getSubscribedCount());
+    
+    BTStatus status = data->ch_server_response->notify(); 
+    
+    // Логируем статус
+    if (status == BTStatus::OK) {
+        // indication_pending = true;
+        ESP_LOGI(LOG_TAG, "Notify инициирован");
+    } else {
+        ESP_LOGE(LOG_TAG, "Ошибка при вызове notify(): %s", status.toString());
+        // Флаг НЕ ставим, так как indication не ушла
     }
 }

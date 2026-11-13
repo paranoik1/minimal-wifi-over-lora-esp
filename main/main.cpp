@@ -1,6 +1,7 @@
 // main/main.cpp
 #include "BLEManager.hpp"
 #include "driver/gpio.h"
+#include "esp_log_level.h"
 #include "freertos/idf_additions.h"
 #include "freertos/projdefs.h"
 #include "hal/gpio_types.h"
@@ -16,8 +17,7 @@
 
 #define GPIO_LED            GPIO_NUM_2
 #define MAX_ITEMS_QUEUE     20
-// #define USER_ID             1
-
+#define LOG_TAG             "main"
 
 QueueHandle_t client_received_packets_queue;
 QueueHandle_t server_received_packets_queue;
@@ -26,8 +26,10 @@ QueueHandle_t send_packets_queue;
 
 void queue_send_and_wait(QueueHandle_t queue, Packet *pkt) {
     while (1) {
-        if (xQueueSend(queue, &pkt, pdMS_TO_TICKS(20)) != pdTRUE) 
+        if (xQueueSend(queue, &pkt, pdMS_TO_TICKS(20)) != pdTRUE) {
+            ESP_LOGD(LOG_TAG, "ОЧередь заполнена, ждем");
             continue;
+        } 
         break;
     }
 }
@@ -84,14 +86,6 @@ void task_process_server_packets(void *pvParameters) {
             goto free_pkt; 
         }
 
-        // NOTE: Проверку на user_id осуществляет Android приложение
-        // Это было сделано для упрощения регистрации пользователя в сети (через простой скан QR-кода через Android приложение)
-        // А так же это дает возможность нескольким телефонам использовать одно клиентское устройство
-        // if (pkt->user_id != USER_ID) {
-        //     printf("Получен пакет чужого пользователя, отбрасываем...\n");
-        //     goto free_pkt; 
-        // }
-
         ble_notify_response_packet_raw(ble_data, pkt_raw, pkt_size);
 
     free_pkt:
@@ -99,6 +93,8 @@ void task_process_server_packets(void *pvParameters) {
         print_packet(pkt);
         free(pkt_raw);
         free_packet(&pkt);
+
+        vTaskDelay(pdMS_TO_TICKS(12));
     }
 }
 
@@ -124,11 +120,17 @@ void init_queue_tasks() {
 }
 
 
-
+void configure_logging() {
+    esp_log_level_set("*", ESP_LOG_INFO);
+    esp_log_level_set("BLEManager", ESP_LOG_VERBOSE);
+    esp_log_level_set("transport", ESP_LOG_DEBUG);
+}
 
 
 extern "C" void app_main(void)
 {
+    configure_logging();
+
     gpio_reset_pin(GPIO_LED);
     gpio_set_direction(GPIO_LED, GPIO_MODE_OUTPUT);
 
