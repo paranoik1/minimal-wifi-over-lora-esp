@@ -8,6 +8,11 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+int get_transport_state();
+
+int get_transport_edges();
+
 void init_transport();
 
 

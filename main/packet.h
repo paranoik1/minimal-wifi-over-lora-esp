@@ -4,7 +4,12 @@
 #include <stdint.h>
 
 
-#define MAX_PACKET_SIZE         240
+// Чтобы можно было переопределить параметром компиляции: -DMAX_PACKET_SIZE=250
+#ifndef MAX_PACKET_SIZE
+#define MAX_PACKET_SIZE         230
+#endif
+
+#define FLAGS_BITS              4
 #define MAX_PAYLOAD_SIZE        (MAX_PACKET_SIZE - 10)
 #define SIZE_METADATA_PACKET    5
 #define BYTES_AFTER_PAYLOAD     1
@@ -16,7 +21,8 @@ X(MSG_REQUEST) \
 X(RECEIVED_PACKETS_REPORT) \
 X(RESPONSE_SERVER) \
 X(ERROR_RESPONSE) \
-X(ACK_SERVER) 
+X(ACK_SERVER) \
+X(FINISH_SESSION)
 
 
 typedef enum _msg_type {
@@ -34,7 +40,7 @@ typedef struct _lora_packet {
     uint8_t msg_type; 
     // 4 бита
     uint8_t session_id;
-    // 4 бита
+    // FLAGS_BITS бита
     uint8_t flags;
     // Идентификатор пакета - нужен для корректной обработки пакетов клиентом в нужной последовательности
     uint16_t pkt_id;
@@ -59,7 +65,7 @@ uint8_t* packet_to_bytes(Packet* pkt, size_t* size_pkt_buff);
 // Создает в куче пакет (`malloc`) - необходимо очищать после обработки
 Packet* packet_from_bytes(const uint8_t* pkt_raw);
 
-uint8_t packet_raw_calculate_crc8(const uint8_t* pkt, size_t size_pkt);
+uint8_t packet_raw_calculate_crc(const uint8_t* pkt, size_t size_pkt);
 
 void free_packet(Packet **pkt);
 

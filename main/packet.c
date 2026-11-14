@@ -1,4 +1,5 @@
 #include "packet.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,9 +19,8 @@ const char* __get_msg_type_name(uint8_t msg_type) {
 
 
 void __convert_flags_to_string(char* buff, uint8_t flags) {
-    // 4 - потому что flags содержит 4 булевых значений - 4 бита
 	int counter = 0; 
-    for (int i = 3; i != -1; i--) {
+    for (int i = FLAGS_BITS - 1; i != -1; i--) {
         if (flags & (1 << i))
             buff[counter] = '1';
         else
@@ -29,7 +29,6 @@ void __convert_flags_to_string(char* buff, uint8_t flags) {
 		counter++;
     }
 }
-
 
 
 
@@ -94,10 +93,10 @@ Packet* packet_from_bytes(const uint8_t* pkt_raw) {
 
 
 void print_packet(Packet *pkt) {
-    char flags_string[5] = {0};
+    char flags_string[FLAGS_BITS + 1] = {0};
     __convert_flags_to_string(flags_string, pkt->flags);
     // NOTE: может быть непредвиденное поведение при выводе такой строки (без конечного символа \0)
-    flags_string[4] = '\0';
+    flags_string[FLAGS_BITS] = '\0';
 
     const char* msg_type = __get_msg_type_name(pkt->msg_type);
 
@@ -108,7 +107,7 @@ void print_packet(Packet *pkt) {
 }
 
 
-uint8_t packet_raw_calculate_crc8(const uint8_t *pkt, size_t size_pkt_without_crc) {
+uint8_t packet_raw_calculate_crc(const uint8_t *pkt, size_t size_pkt_without_crc) {
     uint8_t crc = 0x00;
     uint8_t poly = 0x07;
 

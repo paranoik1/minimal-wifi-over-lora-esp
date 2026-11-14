@@ -1,18 +1,13 @@
 // main/main.cpp
-#include "BLEManager.hpp"
-#include "driver/gpio.h"
-#include "esp_log_level.h"
-#include "freertos/idf_additions.h"
-#include "freertos/projdefs.h"
-#include "hal/gpio_types.h"
+#include <driver/gpio.h>
+#include <esp_log_level.h>
+#include <freertos/idf_additions.h>
+#include <freertos/projdefs.h>
+#include <hal/gpio_types.h>
+
 #include "packet.h"
-
-
-#if CONFIG_USE_MOCK_TRANSPORT
-#   include "transport_uart.h"
-#else
-#   include "transport.h"
-#endif
+#include "BLEManager.hpp"
+#include "lora_transports/lora_transport.h"
 
 
 #define GPIO_LED            GPIO_NUM_2
@@ -79,7 +74,7 @@ void task_process_server_packets(void *pvParameters) {
         size_t pkt_size = 0;
         uint8_t* pkt_raw = packet_to_bytes(pkt, &pkt_size);
         // длина пакета без crc8
-        uint8_t calculated_crc8 = packet_raw_calculate_crc8(pkt_raw, pkt_size - 1);
+        uint8_t calculated_crc8 = packet_raw_calculate_crc(pkt_raw, pkt_size - 1);
 
         if (pkt->crc8 != calculated_crc8) {
             printf("Получен невалидный пакет (несоответсвие контрольных сумм: pkt.crc8 %d != %d - calculated_crc8)\n", pkt->crc8, calculated_crc8);
@@ -206,7 +201,16 @@ extern "C" void app_main(void)
         NULL
     );
 
+    int last_edges = get_transport_edges();
+
     while (1) {
+        int cur_edges = get_transport_edges();
+
+        if (last_edges != cur_edges) {
+            ESP_LOGI("ISR", "edges = %d -> %d", last_edges, cur_edges);
+            last_edges = cur_edges;
+        }
+
         Packet *pkt = NULL;
         if (xQueueReceive(client_received_packets_queue, &pkt, pdMS_TO_TICKS(20)) != pdTRUE) {
             continue;

@@ -1,7 +1,22 @@
-menu "ESP Client Node"
+menu "LoRa Transport Configuration"
 
-    config USE_MOCK_TRANSPORT
-        bool "Использовать транспорт-заглушку для передачи данных на ESP Server Node"
-        default y
+    choice LORA_TRANSPORT_TYPE
+        prompt "Select LoRa Transport Interface"
+        default LORA_TRANSPORT_UART
+        help
+            Выберите интерфейс подключения LoRa модуля.
+
+        config LORA_TRANSPORT_UART
+            bool "UART (AT Commands / Transparent)"
+            help
+                Использовать UART для связи с LoRa модулем.
+                Подходит для модулей с AT-прошивкой или прозрачным UART.
+
+        # config LORA_TRANSPORT_SPI
+        #     bool "SPI (RadioLib / Direct Register)"
+        #     help
+        #         Использовать SPI для прямого управления LoRa чипом.
+        #         Требуется библиотека RadioLib или аналогичный драйвер.
+    endchoice
 
 endmenu

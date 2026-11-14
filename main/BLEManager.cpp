@@ -1,7 +1,8 @@
 #include "BLEManager.hpp"
-#include "esp_log.h"
-#include "gatt/BLECharacteristic.h"
-#include "types/BLEProperty.h"
+
+#include <esp_log.h>
+#include <gatt/BLECharacteristic.h>
+#include <types/BLEProperty.h>
 
 
 #define BLE_DEVICE_NAME        "Mini_Wi-Fi_over_LoRa"
@@ -31,7 +32,7 @@ BLEManagerData* configure_ble_server(void (*onWriteRequestPacketCHR)(BLECharacte
         service->createCharacteristic(
             CHR_REQUEST_PACKET_UUID,
             BLEProperty::Write,
-            BLEPermission::WriteEncrypted
+            BLEPermission::WriteOpen
         )
     );
     
