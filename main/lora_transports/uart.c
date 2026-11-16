@@ -125,7 +125,7 @@ static int8_t dx_smart_rssi_to_dbm(uint8_t raw_byte) {
 
 
 // FIXME: осуществлять чтение всего буфера без таймаутов и только в том случае, если модуль не занят
-Packet* transport_receive_packet(int8_t* rssi) {
+Packet* transport_receive_packet(RSSI* rssi) {
     uint8_t pkt_raw[MAX_PACKET_SIZE] = {};
 
     // Сначала читаем метаданные.

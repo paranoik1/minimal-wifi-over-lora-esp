@@ -1,22 +1,29 @@
 // main/main.cpp
+#include <cstdint>
 #include <driver/gpio.h>
 #include <esp_log_level.h>
 #include <freertos/idf_additions.h>
 #include <freertos/projdefs.h>
 #include <hal/gpio_types.h>
 
+#include "esp_err.h"
+#include "esp_timer.h"
 #include "packet.h"
 #include "BLEManager.hpp"
 #include "lora_transports/lora_transport.h"
 
 
-#define GPIO_LED            GPIO_NUM_2
 #define MAX_ITEMS_QUEUE     20
 #define LOG_TAG             "main"
+
 
 QueueHandle_t client_received_packets_queue;
 QueueHandle_t server_received_packets_queue;
 QueueHandle_t send_packets_queue;
+
+
+inline BLEManagerClass BLEManager;
+static volatile RSSI last_rssi = 0;
 
 
 void queue_send_and_wait(QueueHandle_t queue, Packet *pkt) {
@@ -35,9 +42,12 @@ void queue_send_and_wait(QueueHandle_t queue, Packet *pkt) {
 */
 void task_receive_server_packets(void *pvParameters) {
     while (1) {
-        int8_t rssi;
+        RSSI rssi = 0;
         Packet *pkt = transport_receive_packet(&rssi);
+
         if (pkt == NULL) continue;
+
+        last_rssi = rssi;
 
         queue_send_and_wait(server_received_packets_queue, pkt);
 
@@ -66,7 +76,6 @@ void task_send_packets_to_server(void *pvParameters) {
 Таска для обработки полученных пакетов (сообщений) от сервера (проверка контрольной суммы, проверка user_id) с последующей отправкой по BLE клиенту
 */
 void task_process_server_packets(void *pvParameters) {
-    BLEManagerData* ble_data = (BLEManagerData*)pvParameters; 
     while (1) {
         Packet *pkt = NULL;
         if (xQueueReceive(server_received_packets_queue, &pkt, pdMS_TO_TICKS(20)) != pdTRUE) 
@@ -82,10 +91,10 @@ void task_process_server_packets(void *pvParameters) {
             goto free_pkt; 
         }
 
-        ble_notify_response_packet_raw(ble_data, pkt_raw, pkt_size);
+        BLEManager.notifyResponsePacket(pkt_raw, pkt_size);
 
     free_pkt:
-        printf("Очистка кучи: ");
+        ESP_LOGD("process_pkts", "Очистка кучи (пакета)");
         print_packet(pkt);
         free(pkt_raw);
         free_packet(&pkt);
@@ -93,9 +102,6 @@ void task_process_server_packets(void *pvParameters) {
         vTaskDelay(pdMS_TO_TICKS(12));
     }
 }
-
-
-
 
 
 void __init_queue(QueueHandle_t *queue, const char* error_message) {
@@ -123,11 +129,23 @@ void configure_logging() {
 }
 
 
+static void timer_notify_last_rssi(void *params) {
+    ESP_LOGI("timer_notify_rssi", "Notify RSSI: %d", last_rssi);
+    BLEManager.notifyRssi(last_rssi);
+}
+
+
+esp_timer_create_args_t timer_args = {
+    .callback = &timer_notify_last_rssi,
+    .arg = NULL,
+    .name = "RSSI Timer",
+}; // type: ignore
+esp_timer_handle_t timer_handler = NULL;
+bool timer_started_success = false;
+
+
 extern "C" void app_main(void)
 {
-    gpio_reset_pin(GPIO_LED);
-    gpio_set_direction(GPIO_LED, GPIO_MODE_OUTPUT);
-
     // Инициализация очередей
     init_queue_tasks();
     // Инициализация Arduino runtime
@@ -141,40 +159,41 @@ extern "C" void app_main(void)
 
     ESP_LOGI(LOG_TAG, "lora_configure: %s",
             esp_err_to_name(error));
-    
-    BLEManagerData *ble_data = configure_ble_server([](BLECharacteristic chr, const BLEConnInfo &conn) {
-        ESP_LOGI(LOG_TAG, "Получен сформированный пакет...");
+
+    BLEManager.onClientRequestPkt([](BLECharacteristic chr, const BLEConnInfo &conn) {
+        ESP_LOGI("request_pkt", "Получен сформированный пакет от клиента...");
         size_t size_packet = 0;
         const uint8_t* pkt_raw = chr.getValue(&size_packet);
-        Packet* packet = packet_from_bytes(pkt_raw); // size_packet
+        Packet* packet = packet_from_bytes(pkt_raw);
+
         queue_send_and_wait(client_received_packets_queue, packet);
+
+        if (timer_started_success) {
+            ESP_LOGI("request_pkt", "timer уже существует и запущен");
+            esp_timer_dump(stdout);
+            return;
+        }
+
+        esp_err_t err = esp_timer_create(&timer_args, &timer_handler);
+        if (err != ESP_OK) {
+            ESP_LOGE("request_pkt", 
+                ">> ошибка при создании timer = %s", esp_err_to_name(err)
+            );
+            while(1);
+        }
+
+        err = esp_timer_start_periodic(timer_handler, 5 * 1000 * 1000);
+        if (err != ESP_OK) {
+            ESP_LOGE("request_pkt", 
+                ">> ошибка при запуске = %s", esp_err_to_name(err)
+            );
+            while(1);
+        }
+
+        timer_started_success = true;
     });
-    if (ble_data == nullptr) {
-        ESP_LOGE(LOG_TAG, "BLE configuration failed!");
-        while(1);
-    }
 
-    set_ble_server_callbacks(
-        ble_data, 
-        []() {
-            ESP_LOGI(LOG_TAG, "Connected");
-            gpio_set_level(GPIO_LED, 1);
-            vTaskDelay(pdMS_TO_TICKS(500)); 
-            gpio_set_level(GPIO_LED, 0);
-        },
-        [](BLEManagerData *cur_data, uint8_t reason) {
-            ESP_LOGI(LOG_TAG, "Disconnected, reason: 0x%02X", reason);
-            // start_advertising_ble();
-            for (int i = 0; i < 2; i++) {
-                gpio_set_level(GPIO_LED, 1);
-                vTaskDelay(pdMS_TO_TICKS(500)); 
-                gpio_set_level(GPIO_LED, 0);
-                vTaskDelay(pdMS_TO_TICKS(500)); 
-            }
-        } 
-    );
-
-    start_advertising_ble();
+    BLEManager.startAdvertising();
     printf("BLE Server started successfully!\n");
 
     xTaskCreate(
@@ -199,7 +218,7 @@ extern "C" void app_main(void)
         task_process_server_packets,
         "Process server packets",
         2048,
-        ble_data,
+        NULL,
         1,
         NULL
     );
