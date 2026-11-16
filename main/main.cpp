@@ -116,7 +116,7 @@ void init_queue_tasks() {
 
 
 void configure_logging() {
-    esp_log_level_set("*", ESP_LOG_INFO);
+    // esp_log_level_set("*", ESP_LOG_INFO);
     esp_log_level_set("BLEManager", ESP_LOG_VERBOSE);
     esp_log_level_set("transport", ESP_LOG_DEBUG);
 }
@@ -124,8 +124,6 @@ void configure_logging() {
 
 extern "C" void app_main(void)
 {
-    configure_logging();
-
     gpio_reset_pin(GPIO_LED);
     gpio_set_direction(GPIO_LED, GPIO_MODE_OUTPUT);
 
@@ -135,32 +133,36 @@ extern "C" void app_main(void)
     initArduino();
     // Инициализациия транспорта (передача и получение пакетов)
     init_transport();
+    // Нужно вызывать после initArduino, в ином случае настройки, сделанные функцией ниже перезапишутся функцией initArduino
+    configure_logging();
 
-    Serial.begin(115200);
+    esp_err_t error = lora_configure();
 
+    ESP_LOGI(LOG_TAG, "lora_configure: %s",
+            esp_err_to_name(error));
     
     BLEManagerData *ble_data = configure_ble_server([](BLECharacteristic chr, const BLEConnInfo &conn) {
-        Serial.println("Получен сформированный пакет...");
+        ESP_LOGI(LOG_TAG, "Получен сформированный пакет...");
         size_t size_packet = 0;
         const uint8_t* pkt_raw = chr.getValue(&size_packet);
-        Packet* packet = packet_from_bytes(pkt_raw);
+        Packet* packet = packet_from_bytes(pkt_raw); // size_packet
         queue_send_and_wait(client_received_packets_queue, packet);
     });
     if (ble_data == nullptr) {
-        Serial.println("BLE configuration failed!");
+        ESP_LOGE(LOG_TAG, "BLE configuration failed!");
         while(1);
     }
 
     set_ble_server_callbacks(
         ble_data, 
         []() {
-            Serial.println("Connected");
+            ESP_LOGI(LOG_TAG, "Connected");
             gpio_set_level(GPIO_LED, 1);
             vTaskDelay(pdMS_TO_TICKS(500)); 
             gpio_set_level(GPIO_LED, 0);
         },
         [](BLEManagerData *cur_data, uint8_t reason) {
-            Serial.printf("Disconnected, reason: 0x%02X\n", reason);
+            ESP_LOGI(LOG_TAG, "Disconnected, reason: 0x%02X", reason);
             // start_advertising_ble();
             for (int i = 0; i < 2; i++) {
                 gpio_set_level(GPIO_LED, 1);
@@ -172,7 +174,7 @@ extern "C" void app_main(void)
     );
 
     start_advertising_ble();
-    Serial.println("BLE Server started successfully!");
+    printf("BLE Server started successfully!\n");
 
     xTaskCreate(
         task_receive_server_packets,
