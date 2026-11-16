@@ -17,7 +17,7 @@ int get_transport_edges();
 void init_transport();
 
 
-Packet* transport_receive_packet();
+Packet* transport_receive_packet(int8_t* rssi);
 
 void transport_send_packet(Packet *packet);
 

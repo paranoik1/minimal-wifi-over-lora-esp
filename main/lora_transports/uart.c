@@ -118,9 +118,14 @@ void init_transport() {
     ESP_LOGI("AUX", "init: level=%d", gpio_get_level(AUX_GPIO));
 }
 
+// Только для DX-SMART LR32 при AT+DRSSI1
+static int8_t dx_smart_rssi_to_dbm(uint8_t raw_byte) {
+    return -(int8_t)(0xFF - raw_byte);
+}
+
 
 // FIXME: осуществлять чтение всего буфера без таймаутов и только в том случае, если модуль не занят
-Packet* transport_receive_packet() {
+Packet* transport_receive_packet(int8_t* rssi) {
     uint8_t pkt_raw[MAX_PACKET_SIZE] = {};
 
     // Сначала читаем метаданные.
@@ -165,6 +170,22 @@ Packet* transport_receive_packet() {
             length, remaining_length
         );
         return NULL;
+    }
+
+    uint8_t raw_rssi = 0;
+    length = uart_read_bytes(
+        LORA_UART, 
+        &raw_rssi, 
+        1, 
+        pdMS_TO_TICKS(20)
+    );
+    if (length == 0) {
+        ESP_LOGI(LOG_TAG, ">> receive - нет информации об rssi");
+    } else if (length < 0) {
+        ESP_LOGE(LOG_TAG, ">> receive - ошибка при чтении rssi");
+    } else {
+        *rssi = dx_smart_rssi_to_dbm(raw_rssi);
+        ESP_LOGI(LOG_TAG, "RSSI: %d", *rssi);
     }
 
     return packet_from_bytes(pkt_raw);

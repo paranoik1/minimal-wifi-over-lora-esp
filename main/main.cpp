@@ -35,7 +35,8 @@ void queue_send_and_wait(QueueHandle_t queue, Packet *pkt) {
 */
 void task_receive_server_packets(void *pvParameters) {
     while (1) {
-        Packet *pkt = transport_receive_packet();
+        int8_t rssi;
+        Packet *pkt = transport_receive_packet(&rssi);
         if (pkt == NULL) continue;
 
         queue_send_and_wait(server_received_packets_queue, pkt);

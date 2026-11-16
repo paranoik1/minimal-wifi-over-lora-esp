@@ -1,8 +1,12 @@
 #include "packet.h"
+#include "esp_log.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+
+#define LOG_TAG     "packet"
 
 
 // #name - превращает макрос параметр в строку (name = MSG_REQUEST => #name = "MSG_REQUEST")
@@ -58,6 +62,13 @@ uint8_t* packet_to_bytes(Packet *pkt, size_t* size_pkt_buff) {
 
 
 Packet* packet_from_bytes(const uint8_t* pkt_raw) {
+    if (pkt_raw == NULL) {
+        // %p - тип для вывода указателей
+        ESP_LOGE(LOG_TAG, 
+            ">> packet_from_bytes - *pkt_raw = NULL");
+        return NULL;
+    }
+
     uint8_t header = pkt_raw[0];
     uint8_t session_info = pkt_raw[1];
     uint16_t pkt_id = (uint16_t)pkt_raw[2] << 8 | (uint16_t)pkt_raw[3];
