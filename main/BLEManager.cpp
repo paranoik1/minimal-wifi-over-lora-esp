@@ -47,12 +47,12 @@ static void configureLED() {
     gpio_set_direction(GPIO_LED, GPIO_MODE_OUTPUT);
 }
 
-BLEManagerClass::~BLEManagerClass()  {
-    delete server;
-}
+// BLEManagerClass::~BLEManagerClass()  {
+//     delete server;
+// }
 
 
-BLEManagerClass::BLEManagerClass() {
+void BLEManagerClass::init() {
     configureLED();
 
     BLE.begin(BLE_DEVICE_NAME);

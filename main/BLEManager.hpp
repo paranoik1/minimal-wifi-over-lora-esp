@@ -17,8 +17,10 @@ class BLEManagerClass {
         BLECharacteristic *ch_rssi_notification;
 
     public:
-        BLEManagerClass();
-        ~BLEManagerClass();
+        BLEManagerClass() = default;
+        // ~BLEManagerClass();
+
+        void init();
 
         void onClientRequestPkt(std::function<void(BLECharacteristic chr, const BLEConnInfo &conn)>);
         void notifyRssi(RSSI rssi);

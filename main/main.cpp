@@ -87,15 +87,15 @@ void task_process_server_packets(void *pvParameters) {
         uint8_t calculated_crc8 = packet_raw_calculate_crc(pkt_raw, pkt_size - 1);
 
         if (pkt->crc8 != calculated_crc8) {
-            printf("Получен невалидный пакет (несоответсвие контрольных сумм: pkt.crc8 %d != %d - calculated_crc8)\n", pkt->crc8, calculated_crc8);
+            ESP_LOGD("process_pkt", "Несоответствие контрольных сумм: pkt.crc8 (%d) != calculated_crc8 (%d) )", pkt->crc8, calculated_crc8);
             goto free_pkt; 
         }
 
+        ESP_LOGD("process_pkt", "валидный пакет: ");
+        print_packet(pkt);
         BLEManager.notifyResponsePacket(pkt_raw, pkt_size);
 
     free_pkt:
-        ESP_LOGD("process_pkts", "Очистка кучи (пакета)");
-        print_packet(pkt);
         free(pkt_raw);
         free_packet(&pkt);
 
@@ -144,6 +144,42 @@ esp_timer_handle_t timer_handler = NULL;
 bool timer_started_success = false;
 
 
+static const char* _callback_tag = "request_pkt";
+void receive_client_request_packet_callback(BLECharacteristic chr, const BLEConnInfo &conn) {
+    ESP_LOGI(_callback_tag, "Получен сформированный пакет от клиента...");
+    size_t size_packet = 0;
+    const uint8_t* pkt_raw = chr.getValue(&size_packet);
+    Packet* packet = packet_from_bytes(pkt_raw);
+
+    queue_send_and_wait(client_received_packets_queue, packet);
+
+    if (timer_started_success) {
+        ESP_LOGI(_callback_tag, "timer уже существует и запущен");
+        esp_timer_dump(stdout);
+        return;
+    }
+
+    esp_err_t err = esp_timer_create(&timer_args, &timer_handler);
+    if (err != ESP_OK) {
+        ESP_LOGE(_callback_tag, 
+            ">> ошибка при создании timer = %s", esp_err_to_name(err)
+        );
+        while(1);
+    }
+
+    err = esp_timer_start_periodic(timer_handler, 5 * 1000 * 1000);
+    if (err != ESP_OK) {
+        ESP_LOGE(_callback_tag, 
+            ">> ошибка при запуске = %s", esp_err_to_name(err)
+        );
+        while(1);
+    }
+
+    timer_started_success = true;
+}
+
+
+
 extern "C" void app_main(void)
 {
     // Инициализация очередей
@@ -154,45 +190,15 @@ extern "C" void app_main(void)
     init_transport();
     // Нужно вызывать после initArduino, в ином случае настройки, сделанные функцией ниже перезапишутся функцией initArduino
     configure_logging();
+    // Для работы BLE.h сначало необходимо инициализировать initArduino 
+    BLEManager.init();
 
     esp_err_t error = lora_configure();
 
     ESP_LOGI(LOG_TAG, "lora_configure: %s",
             esp_err_to_name(error));
 
-    BLEManager.onClientRequestPkt([](BLECharacteristic chr, const BLEConnInfo &conn) {
-        ESP_LOGI("request_pkt", "Получен сформированный пакет от клиента...");
-        size_t size_packet = 0;
-        const uint8_t* pkt_raw = chr.getValue(&size_packet);
-        Packet* packet = packet_from_bytes(pkt_raw);
-
-        queue_send_and_wait(client_received_packets_queue, packet);
-
-        if (timer_started_success) {
-            ESP_LOGI("request_pkt", "timer уже существует и запущен");
-            esp_timer_dump(stdout);
-            return;
-        }
-
-        esp_err_t err = esp_timer_create(&timer_args, &timer_handler);
-        if (err != ESP_OK) {
-            ESP_LOGE("request_pkt", 
-                ">> ошибка при создании timer = %s", esp_err_to_name(err)
-            );
-            while(1);
-        }
-
-        err = esp_timer_start_periodic(timer_handler, 5 * 1000 * 1000);
-        if (err != ESP_OK) {
-            ESP_LOGE("request_pkt", 
-                ">> ошибка при запуске = %s", esp_err_to_name(err)
-            );
-            while(1);
-        }
-
-        timer_started_success = true;
-    });
-
+    BLEManager.onClientRequestPkt(receive_client_request_packet_callback);
     BLEManager.startAdvertising();
     printf("BLE Server started successfully!\n");
 
