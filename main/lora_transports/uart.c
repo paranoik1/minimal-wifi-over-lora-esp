@@ -421,7 +421,7 @@ static esp_err_t at_set(const char *key, const char *val)
 
 Пределы канала в 10-чиной системе: от 1 до 98 включительно
 */
-static esp_err_t lora_set_freq(double mhz)
+esp_err_t lora_set_freq(float mhz)
 {
     // lround возвращает long значение, в то время как round - double
     int n = (int)lround(mhz - 850.15);
@@ -435,6 +435,37 @@ static esp_err_t lora_set_freq(double mhz)
 
     return at_set("CHANNEL", v);
 }
+
+
+esp_err_t lora_set_sf(uint8_t sf) {
+    ESP_LOGE(LOG_TAG, "setting: Модуль не поддерживает прямое изменение spreading factor");
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+esp_err_t lora_set_bw(float bw) {
+    ESP_LOGE(LOG_TAG, "setting: Модуль не поддерживает прямое изменение bandwidth");
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+esp_err_t lora_set_cr(lora_coding_rate_t cr) {
+    ESP_LOGE(LOG_TAG, "setting: Модуль не поддерживает прямое изменение coding rate");
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+
+esp_err_t lora_set_power(uint8_t power) {
+    char data[5];
+    snprintf(data, sizeof data, "%d", power);
+    return at_set("POWE",  data);
+}
+
+
+esp_err_t lora_set_level_air_rate(int level) {
+    char data[5];
+    snprintf(data, sizeof data, "%d", level);
+    return at_set("LEVEL",  data);
+}
+
 
 // static void aux_wait_idle(int to_ms)
 // {
@@ -453,9 +484,9 @@ esp_err_t lora_configure()
     // at_set("BOUD",     "7");    // 115200
     at_set("MODE",    "0");        // transparent
     at_set("SLEEP",   "2");        // всегда в приёме
-    at_set("LEVEL",   "2");        // SF11/BW500/CR4/5
+    lora_set_level_air_rate(2);       // SF11/BW500/CR4/5
+    lora_set_power(10);
     lora_set_freq(910.15);              // AT+CHANNEL41
-    at_set("POWE",    "10");       // мозность - 10 для настольных тестов
     at_set("PACKET",  "3");        // Размер пакета - 230B
     at_set("DRSSI",   "1");        // RSSI последним байтом
     at_set("IQ",      "1");
