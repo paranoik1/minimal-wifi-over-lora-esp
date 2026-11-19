@@ -1,0 +1,27 @@
+{
+    "idf.currentSetup": "/home/q/.espressif/v6.1.1/esp-idf",
+    "clangd.path": "/home/q/.espressif/tools/esp-clangd/esp-21.1.3_20260408/esp-clangd/bin/clangd",
+    "clangd.arguments": [
+        "--background-index",
+        "--query-driver=**",
+        "--compile-commands-dir=/home/q/Projects/Minimal_Wi-Fi_over_Radio/esp-client-node/tests/build"
+    ],
+    "cmake.configureOnOpen": false,
+    "cmake.configureOnEdit": false,
+    "cmake.automaticReconfigure": false,
+    "cmake.autoSelectActiveFolder": false,
+    "cmake.options.advanced": {
+        "build": {
+            "statusBarVisibility": "inherit",
+            "inheritDefault": "hidden"
+        },
+        "launch": {
+            "statusBarVisibility": "inherit",
+            "inheritDefault": "hidden"
+        },
+        "debug": {
+            "statusBarVisibility": "inherit",
+            "inheritDefault": "hidden"
+        }
+    },
+}

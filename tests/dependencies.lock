@@ -1,0 +1,262 @@
+dependencies:
+  chmorgan/esp-libhelix-mp3:
+    dependencies: []
+    source:
+      path: ../managed_components/chmorgan__esp-libhelix-mp3
+      type: local
+    version: 1.0.3
+  espressif/arduino-esp32:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__arduino-esp32
+      type: local
+    version: 4.0.0-rc1
+  espressif/cbor:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__cbor
+      type: local
+    version: 0.6.1~4
+  espressif/cjson:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__cjson
+      type: local
+    version: 1.7.19~2
+  espressif/dm9051:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__dm9051
+      type: local
+    version: 1.1.1
+  espressif/esp-dsp:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__esp-dsp
+      type: local
+    version: 1.8.2
+  espressif/esp-modbus:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__esp-modbus
+      type: local
+    version: 2.1.4
+  espressif/esp-zigbee-lib:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__esp-zigbee-lib
+      type: local
+    version: 2.0.4
+  espressif/esp_daylight:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__esp_daylight
+      type: local
+    version: 1.0.1
+  espressif/esp_diag_data_store:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__esp_diag_data_store
+      type: local
+    version: 1.1.1
+  espressif/esp_diagnostics:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__esp_diagnostics
+      type: local
+    version: 1.3.4
+  espressif/esp_insights:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__esp_insights
+      type: local
+    version: 1.3.4
+  espressif/esp_modem:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__esp_modem
+      type: local
+    version: 2.1.0
+  espressif/esp_rainmaker:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__esp_rainmaker
+      type: local
+    version: 1.17.0
+  espressif/esp_schedule:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__esp_schedule
+      type: local
+    version: 1.3.3
+  espressif/esp_secure_cert_mgr:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__esp_secure_cert_mgr
+      type: local
+    version: 2.9.3
+  espressif/jsmn:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__jsmn
+      type: local
+    version: 1.1.0
+  espressif/json_generator:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__json_generator
+      type: local
+    version: 1.1.2
+  espressif/json_parser:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__json_parser
+      type: local
+    version: 1.0.3
+  espressif/ksz8851snl:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__ksz8851snl
+      type: local
+    version: 1.2.0
+  espressif/lan867x:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__lan867x
+      type: local
+    version: 2.1.0
+  espressif/lan86xx_common:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__lan86xx_common
+      type: local
+    version: 1.0.1
+  espressif/libsodium:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__libsodium
+      type: local
+    version: 1.0.22~1
+  espressif/mdns:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__mdns
+      type: local
+    version: 1.14.0
+  espressif/mqtt:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__mqtt
+      type: local
+    version: 1.1.0
+  espressif/network_provisioning:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__network_provisioning
+      type: local
+    version: 1.2.5
+  espressif/qrcode:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__qrcode
+      type: local
+    version: 0.2.0
+  espressif/rmaker_cmd_resp:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__rmaker_cmd_resp
+      type: local
+    version: 1.0.0
+  espressif/rmaker_common:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__rmaker_common
+      type: local
+    version: 1.9.0
+  espressif/rmaker_common_events:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__rmaker_common_events
+      type: local
+    version: 1.1.0
+  espressif/rmaker_console:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__rmaker_console
+      type: local
+    version: 1.0.1
+  espressif/rmaker_system_ctrl:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__rmaker_system_ctrl
+      type: local
+    version: 1.0.0
+  espressif/rmaker_time_sync:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__rmaker_time_sync
+      type: local
+    version: 1.0.2
+  espressif/rmaker_work_queue:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__rmaker_work_queue
+      type: local
+    version: 1.0.0
+  espressif/w5500:
+    dependencies: []
+    source:
+      path: ../managed_components/espressif__w5500
+      type: local
+    version: 1.0.1
+  idf:
+    source:
+      type: idf
+    version: 6.1.1
+  joltwallet/littlefs:
+    dependencies: []
+    source:
+      path: ../managed_components/joltwallet__littlefs
+      type: local
+    version: 1.22.3
+direct_dependencies:
+- chmorgan/esp-libhelix-mp3
+- espressif/arduino-esp32
+- espressif/cbor
+- espressif/cjson
+- espressif/dm9051
+- espressif/esp-dsp
+- espressif/esp-modbus
+- espressif/esp-zigbee-lib
+- espressif/esp_daylight
+- espressif/esp_diag_data_store
+- espressif/esp_diagnostics
+- espressif/esp_insights
+- espressif/esp_modem
+- espressif/esp_rainmaker
+- espressif/esp_schedule
+- espressif/esp_secure_cert_mgr
+- espressif/jsmn
+- espressif/json_generator
+- espressif/json_parser
+- espressif/ksz8851snl
+- espressif/lan867x
+- espressif/lan86xx_common
+- espressif/libsodium
+- espressif/mdns
+- espressif/mqtt
+- espressif/network_provisioning
+- espressif/qrcode
+- espressif/rmaker_cmd_resp
+- espressif/rmaker_common
+- espressif/rmaker_common_events
+- espressif/rmaker_console
+- espressif/rmaker_system_ctrl
+- espressif/rmaker_time_sync
+- espressif/rmaker_work_queue
+- espressif/w5500
+- idf
+- joltwallet/littlefs
+manifest_hash: ef0cfa77b45bd381254f0f72e739c5ac3c02519f053647f162d0d035d8f65783
+target: esp32
+version: 3.0.0
