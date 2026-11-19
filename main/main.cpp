@@ -1,5 +1,7 @@
 // main/main.cpp
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <driver/gpio.h>
 #include <esp_log_level.h>
 #include <freertos/idf_additions.h>
@@ -11,6 +13,7 @@
 #include "packet.h"
 #include "BLEManager.hpp"
 #include "lora_transports/lora_transport.h"
+#include "settings_lora.hpp"
 
 
 #define MAX_ITEMS_QUEUE     20
@@ -22,7 +25,8 @@ QueueHandle_t server_received_packets_queue;
 QueueHandle_t send_packets_queue;
 
 
-inline BLEManagerClass BLEManager;
+// Я не особо разобрался, что такое inline, поэтому просто удалил его навсякий
+BLEManagerClass BLEManager;
 static volatile RSSI last_rssi = 0;
 
 
@@ -144,9 +148,10 @@ esp_timer_handle_t timer_handler = NULL;
 bool timer_started_success = false;
 
 
-static const char* _callback_tag = "request_pkt";
-void receive_client_request_packet_callback(BLECharacteristic chr, const BLEConnInfo &conn) {
-    ESP_LOGI(_callback_tag, "Получен сформированный пакет от клиента...");
+void on_client_request_packet(BLECharacteristic chr, const BLEConnInfo &conn) {
+    const char *tag = "request_pkt";
+
+    ESP_LOGI(tag, "Получен сформированный пакет от клиента...");
     size_t size_packet = 0;
     const uint8_t* pkt_raw = chr.getValue(&size_packet);
     Packet* packet = packet_from_bytes(pkt_raw);
@@ -154,14 +159,14 @@ void receive_client_request_packet_callback(BLECharacteristic chr, const BLEConn
     queue_send_and_wait(client_received_packets_queue, packet);
 
     if (timer_started_success) {
-        ESP_LOGI(_callback_tag, "timer уже существует и запущен");
+        ESP_LOGI(tag, "timer уже существует и запущен");
         esp_timer_dump(stdout);
         return;
     }
 
     esp_err_t err = esp_timer_create(&timer_args, &timer_handler);
     if (err != ESP_OK) {
-        ESP_LOGE(_callback_tag, 
+        ESP_LOGE(tag, 
             ">> ошибка при создании timer = %s", esp_err_to_name(err)
         );
         while(1);
@@ -169,13 +174,33 @@ void receive_client_request_packet_callback(BLECharacteristic chr, const BLEConn
 
     err = esp_timer_start_periodic(timer_handler, 5 * 1000 * 1000);
     if (err != ESP_OK) {
-        ESP_LOGE(_callback_tag, 
+        ESP_LOGE(tag, 
             ">> ошибка при запуске = %s", esp_err_to_name(err)
         );
         while(1);
     }
 
     timer_started_success = true;
+}
+
+
+void on_client_configure_lora(BLECharacteristic chr, const BLEConnInfo &conn) {
+    String settings = chr.getStringValue();
+
+    if (settings == "HELP") {
+        
+        return;
+    }
+
+    char notify_message[300] = {0};
+    esp_err_t err = apply_settings_list(settings, notify_message, sizeof(notify_message));
+    if (err != ESP_OK) {
+        ESP_LOGE("on_client_configure_lora", 
+            "Ошибка - превышена длина nontify_message: %d, %s", 
+            sizeof(notify_message), esp_err_to_name(err));
+    }
+
+    BLEManager.notifyConfigureLoRa(notify_message, strlen(notify_message));
 }
 
 
@@ -198,7 +223,8 @@ extern "C" void app_main(void)
     ESP_LOGI(LOG_TAG, "lora_configure: %s",
             esp_err_to_name(error));
 
-    BLEManager.onClientRequestPkt(receive_client_request_packet_callback);
+    BLEManager.onClientRequestPkt(on_client_request_packet);
+    BLEManager.onClientConfigureLoRa(on_client_configure_lora);
     BLEManager.startAdvertising();
     printf("BLE Server started successfully!\n");
 

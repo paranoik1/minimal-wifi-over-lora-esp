@@ -1,4 +1,5 @@
 #include "BLEManager.hpp"
+#include "gatt/BLECharacteristic.h"
 
 #include <cstdio>
 #include <esp_log.h>
@@ -123,13 +124,20 @@ void BLEManagerClass::startAdvertising() {
 }
 
 
-static void ble_notify(BLECharacteristic *ch, const uint8_t *raw, size_t size) {
-    ch->setValue(raw, size);
+static void ble_notify(BLECharacteristic *ch, const uint8_t *raw, size_t size, bool isSetValue = true) {
+    if (isSetValue)
+        ch->setValue(raw, size);
     
     // Логируем размер и количество подписчиков ПЕРЕД отправкой
     ESP_LOGD(LOG_TAG, "Отправка notify: размер=%zuB, подписчиков=%d", 
              size, ch->getSubscribedCount());
-    BTStatus status = ch->notify();
+    
+    BTStatus status;
+    if (isSetValue) {
+        status = ch->notify();
+    } else {
+        status = ch->notify(raw, size);
+    }
 
     // Логируем статус
     if (status != BTStatus::OK) {
@@ -137,12 +145,14 @@ static void ble_notify(BLECharacteristic *ch, const uint8_t *raw, size_t size) {
     }
 }
 
-void BLEManagerClass::onClientRequestPkt(
-    std::function<void(
-        BLECharacteristic chr, const BLEConnInfo &conn
-    )> handler
-) {
+
+void BLEManagerClass::onClientRequestPkt(BLECharacteristic::WriteHandler handler) {
     ch_client_pkt->onWrite(handler);
+}
+
+
+void BLEManagerClass::onClientConfigureLoRa(BLECharacteristic::WriteHandler handler) {
+    ch_lora_configure->onWrite(handler);
 }
 
 
@@ -155,4 +165,8 @@ void BLEManagerClass::notifyRssi(RSSI rssi) {
     char s[5] = {0};
     snprintf(s, sizeof s, "%d", rssi);
     ble_notify(ch_rssi_notification, (const uint8_t*)s, strlen(s));
+}
+
+void BLEManagerClass::notifyConfigureLoRa(const char *msg, size_t size) {
+    ble_notify(ch_lora_configure, (const uint8_t*)msg, size, false);
 }

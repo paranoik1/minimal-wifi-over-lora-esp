@@ -4,6 +4,7 @@ idf_component_register(
         "packet.c" 
         "main.cpp" 
         "BLEManager.cpp"
+        "settings_lora.cpp"
         # Генератор выражения - нужен для вставки значения в конфигурацию еще до компиляции
         # if здесь вставить нельзя, так как SRCS секция принимает список, а не условную функцию
         # Синтаксис таков $< УСЛОВИЕ : ЗНАЧЕНИЕ_ЕСЛИ_ИСТИНА >
@@ -13,7 +14,7 @@ idf_component_register(
         # если 1, все выражение заменяется ЗНАЧЕНИЕМ_ЕСЛИ_ИСТИНА, в ином случае - пустая строка
         # БЕЗ КОВЫЧЕК!! Генератор сам их подставит, в ином случае вы получите ошибку во время компиляции:
         # Cannot find source file: ...../main/"lora_transports/uart.c"
-        $<$<BOOL:${CONFIG_LORA_TRANSPORT_UART}>:lora_transports/uart.c>
+        $<$<BOOL:${CONFIG_LORA_TRANSPORT_UART}>:lora_transports/dx_lr32.c>
     INCLUDE_DIRS "." "lora_transports"
     REQUIRES arduino-esp32
 )

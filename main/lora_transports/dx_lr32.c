@@ -1,5 +1,6 @@
 /*
-UART tranposrt для DX-SMART Lora модуля - DX-LR32 900T22D
+UART tranposrt для DX-SMART Lora модуля - 
+Тестируется на модулях: DX-LR32 900T22D / DX-LR32 433T22DD
 */
 
 #include <driver/gpio.h>

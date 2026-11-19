@@ -19,11 +19,11 @@
       "inheritDefault": "hidden"
     }
   },
-  "idf.openOcdConfigs": [
-    "board/esp32-wrover-kit-3.3v.cfg"
-  ],
+  // "idf.openOcdConfigs": [
+  //   "board/esp32-wrover-kit-3.3v.cfg"
+  // ],
   "idf.port": "/dev/ttyUSB0",
-  "idf.currentSetup": "/home/q/.espressif/v6.1/esp-idf",
+  "idf.currentSetup": "/home/q/.espressif/v6.1.1/esp-idf",
   "idf.customExtraVars": {
     "IDF_TARGET": "esp32"
   },
