@@ -23,6 +23,7 @@
 QueueHandle_t client_received_packets_queue;
 QueueHandle_t server_received_packets_queue;
 QueueHandle_t send_packets_queue;
+QueueHandle_t lora_config_queue;
 
 
 // Я не особо разобрался, что такое inline, поэтому просто удалил его навсякий
@@ -70,7 +71,11 @@ void task_send_packets_to_server(void *pvParameters) {
         if (xQueueReceive(send_packets_queue, &pkt, pdMS_TO_TICKS(20)) != pdTRUE)
             continue;
 
-        transport_send_packet(pkt);
+        while (1) {
+            bool success = transport_send_packet(pkt);
+            if (success) break;
+        }
+
         free_packet(&pkt);
     }
 }
@@ -123,19 +128,23 @@ void init_queue_tasks() {
     __init_queue(&server_received_packets_queue, "Queue server_received_packets is NULL");
     __init_queue(&client_received_packets_queue, "Queue client_received_packets is NULL");
     __init_queue(&send_packets_queue, "Queue send_packets is NULL");
+    __init_queue(&lora_config_queue, "Queue lora_config_queue is NULL");
 }
 
 
 void configure_logging() {
     // esp_log_level_set("*", ESP_LOG_INFO);
-    esp_log_level_set("BLEManager", ESP_LOG_VERBOSE);
+    esp_log_level_set("BLEManager", ESP_LOG_DEBUG);
     esp_log_level_set("transport", ESP_LOG_DEBUG);
+    esp_log_level_set("client_configure_lora", ESP_LOG_DEBUG);
 }
 
 
 static void timer_notify_last_rssi(void *params) {
-    ESP_LOGI("timer_notify_rssi", "Notify RSSI: %d", last_rssi);
-    BLEManager.notifyRssi(last_rssi);
+    ESP_LOGD("timer_notify_rssi", "Notify RSSI: %d", last_rssi);
+    // FIXME: А может ли быть RSSI = 0?
+    if (last_rssi != 0) 
+        BLEManager.notifyRssi(last_rssi);
 }
 
 
@@ -145,7 +154,7 @@ esp_timer_create_args_t timer_args = {
     .name = "RSSI Timer",
 }; // type: ignore
 esp_timer_handle_t timer_handler = NULL;
-bool timer_started_success = false;
+static volatile bool timer_started_success = false;
 
 
 void on_client_request_packet(BLECharacteristic chr, const BLEConnInfo &conn) {
@@ -159,50 +168,57 @@ void on_client_request_packet(BLECharacteristic chr, const BLEConnInfo &conn) {
     queue_send_and_wait(client_received_packets_queue, packet);
 
     if (timer_started_success) {
-        ESP_LOGI(tag, "timer уже существует и запущен");
-        esp_timer_dump(stdout);
+        ESP_LOGW(tag, "timer уже существует и запущен");
+        // esp_timer_dump(stdout);
         return;
     }
-
-    esp_err_t err = esp_timer_create(&timer_args, &timer_handler);
-    if (err != ESP_OK) {
-        ESP_LOGE(tag, 
-            ">> ошибка при создании timer = %s", esp_err_to_name(err)
-        );
-        while(1);
-    }
-
-    err = esp_timer_start_periodic(timer_handler, 5 * 1000 * 1000);
-    if (err != ESP_OK) {
-        ESP_LOGE(tag, 
-            ">> ошибка при запуске = %s", esp_err_to_name(err)
-        );
-        while(1);
-    }
+    ESP_ERROR_CHECK_WITHOUT_ABORT(esp_timer_create(&timer_args, &timer_handler));
+    ESP_ERROR_CHECK_WITHOUT_ABORT(esp_timer_start_periodic(timer_handler, 5 * 1000 * 1000));
 
     timer_started_success = true;
 }
 
 
 void on_client_configure_lora(BLECharacteristic chr, const BLEConnInfo &conn) {
-    String settings = chr.getStringValue();
-
-    if (settings == "HELP") {
-        
-        return;
-    }
-
-    char notify_message[300] = {0};
-    esp_err_t err = apply_settings_list(settings, notify_message, sizeof(notify_message));
-    if (err != ESP_OK) {
-        ESP_LOGE("on_client_configure_lora", 
-            "Ошибка - превышена длина nontify_message: %d, %s", 
-            sizeof(notify_message), esp_err_to_name(err));
-    }
-
-    BLEManager.notifyConfigureLoRa(notify_message, strlen(notify_message));
+    xQueueSend(lora_config_queue, &chr, pdMS_TO_TICKS(20));
 }
 
+
+void task_lora_config(void *pvParams) {
+    const char *tag = "on_client_configure_lora";
+
+    BLECharacteristic *chr = NULL;
+    while (1) {
+        if (xQueueReceive(lora_config_queue, &chr, pdMS_TO_TICKS(20)) != pdTRUE)
+            continue;
+
+        if (chr == NULL) continue;
+        
+        String settings = chr->getStringValue();
+        ESP_LOGI(tag, "получены настройки: %s, eq_help = %d", settings.c_str(), settings.equals("HELP"));
+
+        if (settings.equals("HELP")) {
+            ESP_LOGI(tag, "Получен HELP запрос");
+            char help[500] = {0};
+            lora_get_config(help, sizeof help);
+            ESP_LOGI(tag, "CONFIG: %s", help);
+            BLEManager.notifyConfigureLoRa(help, strlen(help));
+            continue;
+        }
+
+        char notify_message[500] = {0};
+        esp_err_t err = apply_settings_list(settings, notify_message, sizeof(notify_message));
+
+        if (err != ESP_OK) {
+            ESP_LOGE(tag, 
+                "Ошибка apply_settings вернул %s, stack: size msg = %d, msg = %s", 
+                esp_err_to_name(err), strlen(notify_message), notify_message);
+        }
+
+        ESP_LOGI(tag, "отправляем notify, msg_len = %d, msg = %s", strlen(notify_message), notify_message);
+        BLEManager.notifyConfigureLoRa(notify_message, strlen(notify_message));
+    }
+}
 
 
 extern "C" void app_main(void)
@@ -250,6 +266,15 @@ extern "C" void app_main(void)
         task_process_server_packets,
         "Process server packets",
         2048,
+        NULL,
+        1,
+        NULL
+    );
+
+    xTaskCreate(
+        task_lora_config,
+        "Process lora config request",
+        4096,
         NULL,
         1,
         NULL

@@ -168,5 +168,5 @@ void BLEManagerClass::notifyRssi(RSSI rssi) {
 }
 
 void BLEManagerClass::notifyConfigureLoRa(const char *msg, size_t size) {
-    ble_notify(ch_lora_configure, (const uint8_t*)msg, size, false);
+    ble_notify(ch_lora_configure, (const uint8_t*)msg, size);
 }

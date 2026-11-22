@@ -27,9 +27,12 @@ UART tranposrt для DX-SMART Lora модуля -
 #define LOG_TAG             "transport"
 
 
+static int64_t _aux_start_time = 0;
+
 static volatile uint32_t aux_edges = 0;
 static volatile uint32_t aux_level = 0;
-
+static volatile uint32_t aux_last_interval_ms = 0;
+static SemaphoreHandle_t uart_mutex = NULL;
 
 
 // ISR - INterrupt Service Routine - Процедура обработки прерываний
@@ -45,6 +48,11 @@ static volatile uint32_t aux_level = 0;
 */
 static void IRAM_ATTR aux_isr(void *) {
     aux_level = gpio_get_level(AUX_GPIO);
+    if (aux_level == 1) {   
+        _aux_start_time = esp_timer_get_time();
+    } else {
+        aux_last_interval_ms = (esp_timer_get_time() - _aux_start_time) / 1000;
+    }
     aux_edges++;
 }
 
@@ -117,6 +125,12 @@ void init_transport() {
     gpio_isr_handler_add(AUX_GPIO, aux_isr, NULL);
 
     ESP_LOGI("AUX", "init: level=%d", gpio_get_level(AUX_GPIO));
+
+    // Создаем мьютекс для доступа к UART
+    if (uart_mutex == NULL) {
+        uart_mutex = xSemaphoreCreateMutex();
+        configASSERT(uart_mutex);
+    }
 }
 
 // Только для DX-SMART LR32 при AT+DRSSI1
@@ -125,20 +139,53 @@ static int8_t dx_smart_rssi_to_dbm(uint8_t raw_byte) {
 }
 
 
+static void clear_uart_buffer() {
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    char dummy[50] = {0};
+    int counter = 0;
+    int n = 0;
+    // - 1 под \0 символ
+    while ((n = uart_read_bytes(
+            LORA_UART, 
+            dummy,
+            sizeof dummy - 1, 
+            pdMS_TO_TICKS(200)
+        )) > 0) 
+    { 
+        counter += n;
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+
+    ESP_LOGD(LOG_TAG, "*** clear bytes: %d", counter);
+}
+
+
+
 // FIXME: осуществлять чтение всего буфера без таймаутов и только в том случае, если модуль не занят
 Packet* transport_receive_packet(RSSI* rssi) {
+    while (!gpio_get_level(AUX_GPIO))
+        vTaskDelay(pdMS_TO_TICKS(5));
+
+    if (xSemaphoreTake(uart_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+        ESP_LOGW(LOG_TAG, "transport_receive: mutex timeout");
+        return NULL;
+    }
+
     uint8_t pkt_raw[MAX_PACKET_SIZE] = {};
+    Packet *result = NULL;
 
     // Сначала читаем метаданные.
     int length = uart_read_bytes(
         LORA_UART,
         pkt_raw,
         SIZE_METADATA_PACKET,
-        pdMS_TO_TICKS(20)
+        pdMS_TO_TICKS(100)
     );
 
     if (length != SIZE_METADATA_PACKET) {
-        return NULL;
+        clear_uart_buffer();
+        goto exit;
     }
 
     size_t payload_length = pkt_raw[SIZE_METADATA_PACKET - 1];
@@ -152,7 +199,8 @@ Packet* transport_receive_packet(RSSI* rssi) {
             ">> received - packet_length (len=%d) превышает размер pkt_raw (%d)", 
             packet_length, sizeof(pkt_raw)
         );
-        return NULL;
+        clear_uart_buffer();
+        goto exit;
     }
 
     // Читаем payload и CRC в тот же буфер.
@@ -162,7 +210,7 @@ Packet* transport_receive_packet(RSSI* rssi) {
         // => адрес 1 элемента + SIZE_METADATA_PACKET (5) будет указывать на 5 элемент в массиве => с него и начнется запись данных до адрес 1 эл + SIZE_METADATA_PACKET + remaining_length
         pkt_raw + SIZE_METADATA_PACKET,
         remaining_length,
-        pdMS_TO_TICKS(20)
+        pdMS_TO_TICKS(100)
     );
 
     if (length != remaining_length) {
@@ -170,7 +218,8 @@ Packet* transport_receive_packet(RSSI* rssi) {
             ">> receive - не прошел проверку длины: length = %d, remaining_length = %d", 
             length, remaining_length
         );
-        return NULL;
+        clear_uart_buffer();
+        goto exit;
     }
 
     uint8_t raw_rssi = 0;
@@ -178,10 +227,10 @@ Packet* transport_receive_packet(RSSI* rssi) {
         LORA_UART, 
         &raw_rssi, 
         1, 
-        pdMS_TO_TICKS(20)
+        pdMS_TO_TICKS(100)
     );
     if (length == 0) {
-        ESP_LOGI(LOG_TAG, ">> receive - нет информации об rssi");
+        ESP_LOGW(LOG_TAG, ">> receive - нет информации об rssi");
     } else if (length < 0) {
         ESP_LOGE(LOG_TAG, ">> receive - ошибка при чтении rssi");
     } else {
@@ -189,13 +238,28 @@ Packet* transport_receive_packet(RSSI* rssi) {
         ESP_LOGI(LOG_TAG, "RSSI: %d", *rssi);
     }
 
-    return packet_from_bytes(pkt_raw);
+    result = packet_from_bytes(pkt_raw);
+
+exit:
+    xSemaphoreGive(uart_mutex);
+    return result;
 }
 
 
-void transport_send_packet(Packet *packet) {
+bool transport_send_packet(Packet *packet) {
+    while (1) {
+        if (xSemaphoreTake(uart_mutex, pdMS_TO_TICKS(100)) == pdTRUE) break;
+        ESP_LOGW(LOG_TAG, "send: mutex timeout");
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+    
+    while (gpio_get_level(AUX_GPIO))
+        vTaskDelay(pdMS_TO_TICKS(5));
+
+    bool success = false;
     size_t size_packet;
     uint8_t* pkt_raw = packet_to_bytes(packet, &size_packet);
+
 
     ESP_LOGD(LOG_TAG, "Размер пакета: %d\n", size_packet);
     int bytes_written = uart_write_bytes(LORA_UART, pkt_raw, size_packet);
@@ -204,10 +268,16 @@ void transport_send_packet(Packet *packet) {
 
     if (bytes_written == -1) {
         ESP_LOGE(LOG_TAG, "Error: Failed to write UART\n");
-        return;
+        success = false;
+        goto exit;
     } 
     
     ESP_LOGD(LOG_TAG, "Bytes written: %d", bytes_written);
+    success = true;
+
+exit:
+    xSemaphoreGive(uart_mutex);
+    return success;
 }
 
 
@@ -323,14 +393,15 @@ static esp_err_t at_cmd(const char *cmd, char *resp, size_t resp_size, int to_ms
 */
 static int at_mode_toggle() {
     uart_flush_input(LORA_UART);
-
+    clear_uart_buffer();
+    
     uart_write_bytes(LORA_UART, "+++\r\n", 5);
     vTaskDelay(pdMS_TO_TICKS(100));
 
     ESP_LOGD(LOG_TAG, ">> at_mode_toggle");
 
     char r[128] = {};
-    if (at_line(r, sizeof r, 500) <= 0) {
+    if (at_line(r, sizeof r, 1000) <= 0) {
         ESP_LOGE(LOG_TAG, "<< at_mode_toggle: at_line вернул <= 0");
         return -1; 
     }
@@ -340,23 +411,7 @@ static int at_mode_toggle() {
     if (strcmp("Entry AT", r) == 0) 
         return 0;
     else if (strcmp("Exit AT", r) == 0) {
-        char dummy[30] = {0};
-        int counter = 0;
-        int n;
-        // - 1 под \0 символ
-        while (counter < sizeof dummy - 1 && 
-            (n = uart_read_bytes(
-                LORA_UART, 
-                &dummy[counter], 
-                sizeof dummy - counter - 1, 
-                pdMS_TO_TICKS(50)
-            ) > 0)) 
-        { 
-            ESP_LOGD(LOG_TAG, "at_mode_toggle?: n = %d", n);
-            counter += n;
-        }
-
-        ESP_LOGD(LOG_TAG, "*** clear bytes: %d, dummy=%s", counter, dummy);
+        clear_uart_buffer();
         return 1;
     }
 
@@ -364,32 +419,50 @@ static int at_mode_toggle() {
     return -1;
 }
 
-static bool at_enter()
-{
-    int code = at_mode_toggle();
-    // Если at_mode_toggle вызвал выход из AT режима - повторяем функцию at_enter
-    if (code == 1) 
-        return at_enter();
-    // Если же произошла ошибка, возвращаем false
-    else if (code < 0) 
-        return false;
 
-    // в ином случае все прошло успешно - возвращаем true
-    return true;
+
+static bool at_enter() {
+    while (1) {
+        if (xSemaphoreTake(uart_mutex, pdMS_TO_TICKS(2000)) == pdTRUE) break;
+        ESP_LOGW(LOG_TAG, "at_enter: failed to take mutex");
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+    
+    while (gpio_get_level(AUX_GPIO))
+        vTaskDelay(pdMS_TO_TICKS(5));
+
+    while (1) {
+        int code = at_mode_toggle();
+        if (code == 0) {
+            return true;   // вошли в AT, мьютекс остаётся взят
+        // Если at_mode_toggle вызвал выход из AT режима - повторяем функцию at_enter
+        } else if (code == 1) { 
+            ESP_LOGD(LOG_TAG, "at_enter: модуль уже был в at режиме, заходим снова");
+            continue;
+        } else {
+            xSemaphoreGive(uart_mutex);
+            return false;
+        }
+    }
 }
 
-/* выход: модуль сам перезагрузится */
-static bool at_exit(void)
-{
-    // Тот же алгоритм, что и с at_enter
-    int code = at_mode_toggle();
-    if (code == 0) 
-        return at_exit();
-    else if (code < 0) 
-        return false;
-
-    return true;
+static bool at_exit() {
+    while (1) {
+        int code = at_mode_toggle();
+        if (code == 1) {
+            xSemaphoreGive(uart_mutex);  // вышли из AT — освобождаем UART
+            return true;
+        } else if (code == 0) {
+            ESP_LOGD(LOG_TAG, "at_exit: не были в at режиме, выходим по новой");
+            continue;
+        } else {
+            xSemaphoreGive(uart_mutex);
+            return false;
+        }
+    }
 }
+
+
 
 /* сеттер, толерантный к синтаксису с '=' и без */
 static esp_err_t at_set(const char *key, const char *val)
@@ -467,13 +540,34 @@ esp_err_t lora_set_level_air_rate(int level) {
     return at_set("LEVEL",  data);
 }
 
+esp_err_t lora_start_settings_mode() {
+    if (!at_enter())
+        return ESP_FAIL;
+    return ESP_OK;
+}
 
-// static void aux_wait_idle(int to_ms)
-// {
-//     int64_t t0 = esp_timer_get_time();
-//     while (gpio_get_level(AUX_GPIO) && (esp_timer_get_time() - t0) < (int64_t)to_ms * 1000)
-//         vTaskDelay(pdMS_TO_TICKS(5));
-// }
+esp_err_t lora_apply_settings() {
+    if (!at_exit()) 
+        return ESP_FAIL;
+    return ESP_OK;
+}
+
+esp_err_t lora_get_config(char *help, size_t buffer_size) {
+    if (!at_enter()) {
+        ESP_LOGI(LOG_TAG, "Ошибка: at_enter вернул false");
+        return ESP_FAIL;
+    }
+
+    at_cmd("AT+HELP", help, buffer_size, 11500);
+    
+    if (!at_exit()) {
+        ESP_LOGE(LOG_TAG, "Ошибка: at_exit вернул false");
+        return ESP_FAIL;
+    }
+
+    return ESP_OK;
+}
+
 
 esp_err_t lora_configure()
 {

@@ -29,7 +29,7 @@ void init_transport();
 
 Packet* transport_receive_packet(RSSI* rssi);
 
-void transport_send_packet(Packet *packet);
+bool transport_send_packet(Packet *packet);
 
 /*
  * Изменить мощность передачи модуля (обычно от 1 до 22 dBm,
@@ -70,6 +70,12 @@ esp_err_t lora_set_freq(float mhz);
  * если такая возможность поддерживается.
  */
 esp_err_t lora_set_level_air_rate(int level);
+
+esp_err_t lora_start_settings_mode();
+
+esp_err_t lora_apply_settings();
+
+esp_err_t lora_get_config(char *help, size_t buffer_size);
 
 /*
 Базовая конфигурация модуля

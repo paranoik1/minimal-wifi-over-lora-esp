@@ -134,7 +134,7 @@ TEST_CASE("apply_settings_list: valid settings", "[settings_lora]") {
     TEST_ASSERT_EQUAL(12, fake_lora.last_sf);
     TEST_ASSERT_EQUAL(10, fake_lora.last_power);
     TEST_ASSERT_EQUAL(LORA_CR_4_7, fake_lora.last_cr);
-    TEST_ASSERT_EQUAL(900.15, fake_lora.last_freq);
+    TEST_ASSERT_EQUAL_FLOAT(900.15, fake_lora.last_freq);
     TEST_ASSERT_EQUAL_FLOAT(65.50, fake_lora.last_bw);
 }
 
