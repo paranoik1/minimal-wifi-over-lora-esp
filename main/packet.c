@@ -37,8 +37,8 @@ void __convert_flags_to_string(char* buff, uint8_t flags) {
 
 
 
-uint8_t* packet_to_bytes(Packet *pkt, size_t* size_pkt_buff) {
-    uint8_t* pkt_bytes = malloc(MAX_PACKET_SIZE);
+void packet_to_bytes(Packet *pkt, uint8_t* buff, size_t* size_pkt_buff) {
+    uint8_t* pkt_bytes = buff;
 
     pkt_bytes[0] = (pkt->user_id << 4) | pkt->msg_type;
     pkt_bytes[1] = (pkt->session_id << 4) | pkt->flags;
@@ -56,8 +56,6 @@ uint8_t* packet_to_bytes(Packet *pkt, size_t* size_pkt_buff) {
     pkt_bytes[SIZE_METADATA_PACKET + length_payload] = pkt->crc8;
 
     *size_pkt_buff = SIZE_METADATA_PACKET + length_payload + BYTES_AFTER_PAYLOAD;
-
-    return pkt_bytes;
 }
 
 

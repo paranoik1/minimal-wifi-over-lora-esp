@@ -1,22 +1,33 @@
 # main/CMakeLists.txt
+set(srcs
+    "packet.c" 
+    "main.cpp" 
+    "BLEManager.cpp"
+    "settings_lora.cpp"
+)
+
+set(requires
+    arduino-esp32
+    RadioLib
+)
+
+# set(priv_requires "")
+
+if(CONFIG_LORA_TRANSPORT_UART)
+    list(APPEND srcs "lora_transports/dx_smart.c")
+endif()
+
+if(CONFIG_LORA_TRANSPORT_SPI)
+    list(APPEND srcs "lora_transports/radiolib_spi.cpp")
+    # list(APPEND priv_requires RadioLib)
+    # list(APPEND requires RadioLib)
+endif()
+
 idf_component_register(
-    SRCS 
-        "packet.c" 
-        "main.cpp" 
-        "BLEManager.cpp"
-        "settings_lora.cpp"
-        # Генератор выражения - нужен для вставки значения в конфигурацию еще до компиляции
-        # if здесь вставить нельзя, так как SRCS секция принимает список, а не условную функцию
-        # Синтаксис таков $< УСЛОВИЕ : ЗНАЧЕНИЕ_ЕСЛИ_ИСТИНА >
-        # В данном случае у нас генератор в генераторе - 
-        # преобразуем Kconfig значение в булевую переменную - $<BOOL:${CONFIG_LORA_TRANSPORT_UART}>
-        # А затем, получив из прошлого выражения 0 или 1 получаем выражение - $<1 or 0 : lora_transports/uart.c>
-        # если 1, все выражение заменяется ЗНАЧЕНИЕМ_ЕСЛИ_ИСТИНА, в ином случае - пустая строка
-        # БЕЗ КОВЫЧЕК!! Генератор сам их подставит, в ином случае вы получите ошибку во время компиляции:
-        # Cannot find source file: ...../main/"lora_transports/uart.c"
-        $<$<BOOL:${CONFIG_LORA_TRANSPORT_UART}>:lora_transports/dx_lr32.c>
+    SRCS ${srcs}
     INCLUDE_DIRS "." "lora_transports"
-    REQUIRES arduino-esp32
+    REQUIRES ${requires}
+    # PRIV_REQUIRES ${priv_requires}
 )
 
 # Отключаем warning о неинициализированных полях структур

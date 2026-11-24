@@ -12,11 +12,11 @@ menu "LoRa Transport Configuration"
                 Использовать UART для связи с LoRa модулем.
                 Подходит для модулей с AT-прошивкой или прозрачным UART.
 
-        # config LORA_TRANSPORT_SPI
-        #     bool "SPI (RadioLib / Direct Register)"
-        #     help
-        #         Использовать SPI для прямого управления LoRa чипом.
-        #         Требуется библиотека RadioLib или аналогичный драйвер.
+        config LORA_TRANSPORT_SPI
+            bool "SPI (RadioLib / Direct Register)"
+            help
+                Использовать SPI для прямого управления LoRa чипом.
+                Требуется библиотека RadioLib или аналогичный драйвер.
     endchoice
 
 endmenu

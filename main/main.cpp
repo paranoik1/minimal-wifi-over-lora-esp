@@ -49,7 +49,7 @@ void task_receive_server_packets(void *pvParameters) {
     while (1) {
         RSSI rssi = 0;
         Packet *pkt = transport_receive_packet(&rssi);
-
+        vTaskDelay(pdMS_TO_TICKS(20));
         if (pkt == NULL) continue;
 
         last_rssi = rssi;
@@ -65,15 +65,26 @@ void task_receive_server_packets(void *pvParameters) {
 /*
 Таска для отправки сообщений по LoRa (берет пакеты из очереди send_packets_queue)
 */
+#define MAX_RETRIES_SEND_PACKET     5
+
 void task_send_packets_to_server(void *pvParameters) {
     while (1) {
         Packet* pkt = NULL;
         if (xQueueReceive(send_packets_queue, &pkt, pdMS_TO_TICKS(20)) != pdTRUE)
             continue;
 
+        int retries = 0;
         while (1) {
             bool success = transport_send_packet(pkt);
-            if (success) break;
+            if (success) {
+                ESP_LOGI(LOG_TAG, "Успешная отправка, повторных попыток: %d", retries);
+                break;
+            }
+
+            if (MAX_RETRIES_SEND_PACKET < retries++) {
+                ESP_LOGE(LOG_TAG, "Не удалось отправить пакет, попыток: %d", retries);
+                break;
+            }
         }
 
         free_packet(&pkt);
@@ -91,7 +102,9 @@ void task_process_server_packets(void *pvParameters) {
             continue;
 
         size_t pkt_size = 0;
-        uint8_t* pkt_raw = packet_to_bytes(pkt, &pkt_size);
+        uint8_t pkt_raw[MAX_PACKET_SIZE] = {0};
+
+        packet_to_bytes(pkt, pkt_raw, &pkt_size);
         // длина пакета без crc8
         uint8_t calculated_crc8 = packet_raw_calculate_crc(pkt_raw, pkt_size - 1);
 
@@ -105,7 +118,6 @@ void task_process_server_packets(void *pvParameters) {
         BLEManager.notifyResponsePacket(pkt_raw, pkt_size);
 
     free_pkt:
-        free(pkt_raw);
         free_packet(&pkt);
 
         vTaskDelay(pdMS_TO_TICKS(12));
@@ -201,7 +213,7 @@ void task_lora_config(void *pvParams) {
             ESP_LOGI(tag, "Получен HELP запрос");
             char help[500] = {0};
             lora_get_config(help, sizeof help);
-            ESP_LOGI(tag, "CONFIG: %s", help);
+            ESP_LOGI(tag, "CONFIG: \n%s", help);
             BLEManager.notifyConfigureLoRa(help, strlen(help));
             continue;
         }
@@ -227,17 +239,17 @@ extern "C" void app_main(void)
     init_queue_tasks();
     // Инициализация Arduino runtime
     initArduino();
-    // Инициализациия транспорта (передача и получение пакетов)
-    init_transport();
     // Нужно вызывать после initArduino, в ином случае настройки, сделанные функцией ниже перезапишутся функцией initArduino
     configure_logging();
     // Для работы BLE.h сначало необходимо инициализировать initArduino 
     BLEManager.init();
 
-    esp_err_t error = lora_configure();
-
-    ESP_LOGI(LOG_TAG, "lora_configure: %s",
-            esp_err_to_name(error));
+    // Инициализациия транспорта (передача и получение пакетов)
+    esp_err_t error = lora_init();
+    if (error == ESP_FAIL) {
+        ESP_LOGE(LOG_TAG, "Ошибка инициализации LoRa");
+        while(1);
+    }
 
     BLEManager.onClientRequestPkt(on_client_request_packet);
     BLEManager.onClientConfigureLoRa(on_client_configure_lora);

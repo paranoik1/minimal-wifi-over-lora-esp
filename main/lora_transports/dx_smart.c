@@ -61,13 +61,7 @@ int get_transport_edges() {
     return aux_edges;
 }
 
-
-int get_transport_state() {
-    return aux_level;
-}
-
-
-void init_transport() {
+static void init_transport() {
     uart_config_t uart_config = {
         .baud_rate = LORA_BOUD,
         .data_bits = UART_DATA_8_BITS,
@@ -258,14 +252,12 @@ bool transport_send_packet(Packet *packet) {
 
     bool success = false;
     size_t size_packet;
-    uint8_t* pkt_raw = packet_to_bytes(packet, &size_packet);
-
+    uint8_t pkt_raw[MAX_PACKET_SIZE] = {0};
+    packet_to_bytes(packet, pkt_raw, &size_packet);
 
     ESP_LOGD(LOG_TAG, "Размер пакета: %d\n", size_packet);
     int bytes_written = uart_write_bytes(LORA_UART, pkt_raw, size_packet);
     
-    free(pkt_raw);
-
     if (bytes_written == -1) {
         ESP_LOGE(LOG_TAG, "Error: Failed to write UART\n");
         success = false;
@@ -569,8 +561,10 @@ esp_err_t lora_get_config(char *help, size_t buffer_size) {
 }
 
 
-esp_err_t lora_configure()
+esp_err_t lora_init()
 {
+    init_transport();
+
     if (!at_enter()) {
         ESP_LOGI(LOG_TAG, "Ошибка: at_enter вернул false");
         return ESP_FAIL;

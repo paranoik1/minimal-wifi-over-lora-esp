@@ -20,12 +20,7 @@ typedef enum {
 extern "C" {
 #endif
 
-int get_transport_state();
-
 int get_transport_edges();
-
-void init_transport();
-
 
 Packet* transport_receive_packet(RSSI* rssi);
 
@@ -80,7 +75,7 @@ esp_err_t lora_get_config(char *help, size_t buffer_size);
 /*
 Базовая конфигурация модуля
 */
-esp_err_t lora_configure();
+esp_err_t lora_init();
 
 
 #ifdef __cplusplus

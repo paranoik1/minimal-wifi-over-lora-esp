@@ -59,8 +59,8 @@ extern "C" {
 void print_packet(Packet* pkt);
 
 // `size_t* size_pkt_buff` - переменная, в которое будет записано значение размера всего пакета. 
-// Возвращает указатель на массив байтов в куче - необходимо очистить после использования (`free(pkt_raw)`)
-uint8_t* packet_to_bytes(Packet* pkt, size_t* size_pkt_buff);
+// NOTE: изменения - теперь данные не лежат в куче, а помещаются в buff
+void packet_to_bytes(Packet *pkt, uint8_t* buff, size_t* size_pkt_buff);
 
 // Создает в куче пакет (`malloc`) - необходимо очищать после обработки
 Packet* packet_from_bytes(const uint8_t* pkt_raw);

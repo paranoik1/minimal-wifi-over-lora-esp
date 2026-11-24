@@ -6,6 +6,7 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 # Отключаем Werror для всех компонентов (превращение warnings в errors)
 # set(ENV{IDF_COMPILE_OPTIONS} "-Wno-error")
+set(EXTRA_COMPONENT_DIRS "components")
 
 project(esp_client_node)
 # Или более точечно - отключаем только конкретный warning глобально
