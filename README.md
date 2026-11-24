@@ -135,12 +135,10 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/
 ### 4. Настройка и сборка
 
 ```bash
-. $IDF_PATH/export.sh
 idf.py set-target esp32
 idf.py menuconfig    # включите CONFIG_LORA_TRANSPORT_SPI или CONFIG_LORA_TRANSPORT_UART
 idf.py build
 idf.py -p /dev/ttyUSB0 flash monitor
-```
 ```
 
 ## Технологии
